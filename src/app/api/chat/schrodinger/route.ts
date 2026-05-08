@@ -57,6 +57,9 @@ export async function POST(req: NextRequest) {
       return mergeSchrodingerStreams(s1, s2, modelA, modelB, "openai");
     }
 
+    if (llm.provider !== "zai") {
+      return NextResponse.json({ error: "Schrodinger mode requires Z.AI" }, { status: 503 });
+    }
     const zai = llm.zai;
     const [r1, r2] = await Promise.all([
       zai.chat.completions.create({
@@ -102,7 +105,7 @@ function mergeSchrodingerStreams(
 
       const winner = first.n === 1 ? modelA : modelB;
       controller.enqueue(
-        enc.encode(`data: ${JSON.stringify({ schrodinger: true, winner })}\n\n`),
+        enc.encode("data: " + JSON.stringify({ schrodinger: true, winner }) + "\n\n"),
       );
 
       const primary = first.n === 1 ? reader1 : reader2;
