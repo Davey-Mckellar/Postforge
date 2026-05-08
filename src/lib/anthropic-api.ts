@@ -213,7 +213,9 @@ export async function claudeChatCompletionJson(opts: {
     throw new Error("Anthropic API error " + res.status + ": " + t.slice(0, 800));
   }
 
-  const data = await res.json();
+  const data = await res.json() as {
+    content?: { type: string; text?: string }[];
+  };
 
   return data.content
     ?.filter((b) => b.type === "text")
