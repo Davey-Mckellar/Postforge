@@ -78,7 +78,7 @@ export default function GeminiAlternativePage() {
         </h1>
         <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
           bbGPT includes Gemini 2.5 Flash — and adds GPT-4o and Claude. One login, one credit
-          balance, three of the world's best AI models at your fingertips.
+          balance, three of the world&apos;s best AI models at your fingertips.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link

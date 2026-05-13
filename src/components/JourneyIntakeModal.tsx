@@ -85,7 +85,7 @@ export function JourneyIntakeModal({
               Vision & direction
             </h2>
             <p className={`mt-2 text-xs leading-relaxed ${muted}`}>
-              Seven questions about where you're headed — your mountaintop, your ideal life, your
+              Seven questions about where you&apos;re headed — your mountaintop, your ideal life, your
               flow. These give bbGPT a sense of your bigger picture so responses can connect to what
               actually matters.
             </p>
