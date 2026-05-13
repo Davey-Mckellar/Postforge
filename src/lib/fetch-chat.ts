@@ -27,6 +27,9 @@ export async function fetchChatWithRetry(
 }
 
 export function formatChatError(status: number, bodyError?: string): string {
+  if (status === 429) {
+    return bodyError ?? "Rate limit hit — the free API quota is exhausted. Switch models or try again in a minute.";
+  }
   if (status === 503) {
     if (bodyError?.toLowerCase().includes("no llm") || bodyError?.toLowerCase().includes("configured")) {
       return "LLM not configured — add Z_AI_API_KEY or OPENAI_API_KEY (see .env.local.example).";

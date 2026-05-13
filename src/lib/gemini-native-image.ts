@@ -23,6 +23,20 @@ function isFatalApiError(msg: string): boolean {
   return /\b401\b|\b403\b|PERMISSION_DENIED|API\s+key|quota|429|billing|payment/i.test(msg);
 }
 
+function parseImageError(raw: string): string {
+  if (/429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(raw)) {
+    return "Gemini image quota exhausted. Please try again later or switch to a different model.";
+  }
+  if (/401|403|API.?key|PERMISSION_DENIED|billing|payment/i.test(raw)) {
+    return "Gemini API key is invalid or lacks billing. Check GEMINI_API_KEY in your environment.";
+  }
+  if (/SAFETY|HARM|blocked/i.test(raw)) {
+    return "Gemini blocked this image request due to safety filters. Try a different prompt.";
+  }
+  const clean = raw.replace(/\{[\s\S]*\}/g, "").trim().slice(0, 120);
+  return clean || "Image generation failed. Please try again.";
+}
+
 /**
  * Calls Gemini native image models with the same shapes as Google's docs (string `contents`,
  * optional modalities) and falls back across a few model IDs when the configured ID is unavailable.
@@ -83,7 +97,7 @@ export async function requestGeminiNativeImage(
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (isFatalApiError(msg)) {
-          return { error: msg };
+          return { error: parseImageError(msg) };
         }
         if (isModelMissingError(msg)) {
           lastError = msg;

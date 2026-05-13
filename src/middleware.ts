@@ -4,19 +4,68 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getApiSecret, getSessionSecret, isGateEnabled, isUserAuthEnabled } from "@/lib/server-config";
 
-export async function middleware(request: NextRequest) {
+// ─── Simple burst rate limiter (in-memory, per-process) ──────────────────────
+// Provides burst protection on auth and chat endpoints.
+// Not a substitute for a Redis-backed limiter in high-traffic multi-instance
+// deploys, but materially reduces single-IP brute-force risk on Vercel.
+const RATE_WINDOWS = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(ip: string, route: string, limit: number, windowMs: number): boolean {
+  const key = `${ip}:${route}`;
+  const now = Date.now();
+  const entry = RATE_WINDOWS.get(key);
+  if (!entry || now > entry.resetAt) {
+    RATE_WINDOWS.set(key, { count: 1, resetAt: now + windowMs });
+    return false;
+  }
+  entry.count += 1;
+  if (entry.count > limit) return true;
+  return false;
+}
+
+function clientIp(req: NextRequest): string {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    req.headers.get("x-real-ip") ??
+    "unknown"
+  );
+}
+
+export default async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const ip = clientIp(request);
+
+  // ── Rate limiting (before auth gate) ────────────────────────────────────────
+  // Auth routes: 10 requests per minute per IP
+  if (pathname.startsWith("/api/auth/") || pathname === "/login" || pathname === "/register") {
+    if (isRateLimited(ip, "auth", 10, 60_000)) {
+      return NextResponse.json({ error: "Too many requests — try again in a minute." }, { status: 429 });
+    }
+  }
+  // Chat route: 60 requests per minute per IP (credits are the real gate, this stops burst spam)
+  if (pathname.startsWith("/api/chat")) {
+    if (isRateLimited(ip, "chat", 60, 60_000)) {
+      return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429 });
+    }
+  }
+
+  // ── Auth gate ────────────────────────────────────────────────────────────────
   if (!isGateEnabled()) {
     return NextResponse.next();
   }
 
-  const { pathname } = request.nextUrl;
-
-  if (pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password") {
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password"
+  ) {
     return NextResponse.next();
   }
   if (pathname.startsWith("/api/auth/")) {
     return NextResponse.next();
   }
+  // Stripe webhook bypasses auth — Stripe signs requests with STRIPE_WEBHOOK_SECRET
   if (pathname === "/api/stripe/webhook" || pathname.startsWith("/api/stripe/webhook/")) {
     return NextResponse.next();
   }

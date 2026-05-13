@@ -254,6 +254,65 @@ export function SettingsPanel({
             ) : null}
           </section>
 
+          <section>
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Chat Backup</h3>
+            <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+              Your conversations are saved in this browser only. Export a JSON backup so you never lose them — and
+              restore anytime by importing it.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const raw = localStorage.getItem("bbgpt_conversations") ?? "[]";
+                    const blob = new Blob([raw], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `bbgpt-chats-${new Date().toISOString().slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (e) {
+                    alert("Export failed: " + String(e));
+                  }
+                }}
+                className="rounded-lg bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-zinc-700 hover:bg-zinc-700"
+              >
+                ↓ Export chats
+              </button>
+              <label className="cursor-pointer rounded-lg bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-zinc-700 hover:bg-zinc-700">
+                ↑ Import chats
+                <input
+                  type="file"
+                  accept=".json"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      try {
+                        const incoming = JSON.parse(reader.result as string) as Array<{ id: string }>;
+                        if (!Array.isArray(incoming)) throw new Error("Expected an array");
+                        const existingRaw = localStorage.getItem("bbgpt_conversations") ?? "[]";
+                        const existing = JSON.parse(existingRaw) as Array<{ id: string }>;
+                        const existingIds = new Set(existing.map((c) => c.id));
+                        const merged = [...existing, ...incoming.filter((c) => !existingIds.has(c.id))];
+                        localStorage.setItem("bbgpt_conversations", JSON.stringify(merged));
+                        alert(`Imported ${incoming.length - (incoming.length - merged.length + existing.length)} new conversations. Refresh to see them.`);
+                      } catch (err) {
+                        alert("Import failed — invalid file: " + String(err));
+                      }
+                    };
+                    reader.readAsText(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </section>
+
           <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4">
             <button
               type="button"

@@ -21,3 +21,17 @@ games
 # Misc
 *.tsbuildinfo
 public/uploads
+
+# Large binary files that should never be deployed
+*.iso
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.mp4
+*.mkv
+*.avi
+*.dmg
+*.exe
+*.msi

@@ -14,6 +14,30 @@ function sseOpenAiDelta(text: string): string {
   return `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`;
 }
 
+/**
+ * Converts a raw Gemini API error (often a JSON blob inside e.message)
+ * into a short, user-readable sentence.
+ */
+function parseGeminiError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+
+  // 429 / quota exhausted
+  if (/429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(raw)) {
+    return "Gemini free-tier quota exceeded. Switch to a different model (e.g. GLM or GPT-4o) or try again in a minute.";
+  }
+  // Auth / key problems
+  if (/401|403|API.?key|PERMISSION_DENIED|billing|payment/i.test(raw)) {
+    return "Gemini API key is invalid or lacks billing. Check GEMINI_API_KEY in your environment.";
+  }
+  // Safety block
+  if (/SAFETY|HARM|blocked/i.test(raw)) {
+    return "Gemini blocked this request due to its safety filters. Try rephrasing your message.";
+  }
+  // Generic — strip JSON noise, keep first 120 chars
+  const clean = raw.replace(/\{[\s\S]*\}/g, "").trim().slice(0, 120);
+  return clean || "Gemini request failed. Please try again.";
+}
+
 function validateAttachments(messages: PayloadMessage[], maxBytes: number): string | null {
   for (const m of messages) {
     for (const a of m.attachments ?? []) {
@@ -131,8 +155,8 @@ export async function POST(req: NextRequest) {
           controller.enqueue(enc.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (e) {
-          const msg = e instanceof Error ? e.message : "Gemini stream failed";
-          controller.enqueue(enc.encode(sseOpenAiDelta(`\n\n[Error] ${msg}`)));
+          const msg = parseGeminiError(e);
+          controller.enqueue(enc.encode(sseOpenAiDelta(`\n\n⚠️ ${msg}`)));
           controller.close();
         }
       },
@@ -148,7 +172,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Gemini request failed";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    const msg = parseGeminiError(e);
+    const status = /quota|429|RESOURCE_EXHAUSTED/i.test(e instanceof Error ? e.message : "") ? 429 : 502;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

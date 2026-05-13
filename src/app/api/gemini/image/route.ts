@@ -5,6 +5,25 @@ import { createGeminiClient } from "@/lib/gemini-server";
 import { parseModelTierBody } from "@/lib/model-tier";
 import type { ModelTier } from "@/lib/types";
 
+async function tryDalleFallback(prompt: string): Promise<{ imageUrl: string; model: string } | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: "dall-e-3", prompt, n: 1, size: "1024x1024", response_format: "b64_json" }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { data?: Array<{ b64_json?: string }> };
+    const b64 = data?.data?.[0]?.b64_json;
+    if (!b64) return null;
+    return { imageUrl: b64, model: "dall-e-3" };
+  } catch {
+    return null;
+  }
+}
+
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
@@ -49,6 +68,17 @@ export async function POST(req: NextRequest) {
   try {
     const result = await requestGeminiNativeImage(ai, prompt);
     if ("error" in result) {
+      // If Gemini quota is exhausted, try DALL-E 3 as fallback
+      if (/quota|RESOURCE_EXHAUSTED|429|rate.?limit/i.test(result.error)) {
+        const dalle = await tryDalleFallback(prompt);
+        if (dalle) {
+          return NextResponse.json({
+            mimeType: "image/png",
+            imageBase64: dalle.imageUrl,
+            model: dalle.model,
+          });
+        }
+      }
       return NextResponse.json({ error: result.error }, { status: 502 });
     }
     return NextResponse.json({

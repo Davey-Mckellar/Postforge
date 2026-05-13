@@ -71,3 +71,8 @@ public/uploads/*
 # One-off login/HTML captures (may contain secrets; do not commit)
 scripts/_*.txt
 scripts/_www-login.html
+
+# Local USB/ISO artifacts (multi‑GB; do not push)
+outputs/*.iso
+outputs/rufus.exe
+outputs/user-data
