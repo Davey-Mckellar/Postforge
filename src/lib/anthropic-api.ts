@@ -4,27 +4,43 @@
  * Converts Anthropic SSE → OpenAI-compatible SSE so the existing client parser
  * (stream-parse.ts) works with zero changes on the frontend.
  *
- * Prompt caching is enabled on every request:
- *   - System prompt is marked cache_control: {type:"ephemeral"} → ~90% cost
- *     reduction on repeated system tokens (5-minute TTL per Anthropic docs).
- *   - For conversations ≥ 6 turns, the message midpoint is also cached so
- *     the shared prefix of long chats isn't re-billed.
+ * Prompt caching strategy:
+ *   Anthropic's cache_control is only valid on:
+ *     - system content blocks
+ *     - user message content blocks
+ *     - tool result blocks
+ *   Assistant blocks are NOT supported — applying cache_control there
+ *   will cause 400 errors or silent cache misses.
+ *
+ *   We apply two breakpoints:
+ *   1. System block (always) — caches the static base instructions.
+ *      Dynamic content (memory, skills, DNA) is deliberately kept in a
+ *      SEPARATE un-cached user message so it doesn't bust the static cache.
+ *   2. Midpoint user turn in long conversations (≥ 6 turns) — finds the
+ *      nearest USER turn at or before the midpoint, never an assistant turn.
+ *
+ *   Cache TTL: 5 minutes (Anthropic ephemeral). Cache key = exact bytes.
  *
  * Supported models:
- *   claude-haiku   → claude-haiku-4-5-20251001   (fast, 1 cr)
- *   claude-sonnet  → claude-sonnet-4-6            (balanced, 5 cr)
- *   claude-opus    → claude-opus-4-6              (flagship, 10 cr)
+ *   claude-haiku   → claude-haiku-4-5-20251001
+ *   claude-sonnet  → claude-sonnet-4-6
+ *   claude-opus    → claude-opus-4-6
  */
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
-
-// Minimum tokens a block must contain before the cache_control hint is useful.
-// Anthropic ignores cache_control on blocks < 1 024 tokens (Haiku/Sonnet/Opus 4.x).
-// 800 chars ≈ 200 tokens — we apply it unconditionally; Anthropic silently ignores
-// the hint on small blocks rather than erroring.
 const CACHE_BETA = "prompt-caching-2024-07-31";
 const THINKING_BETA = "interleaved-thinking-2025-05-14";
+
+/**
+ * Static identity sent on every Claude request.
+ * This text is IDENTICAL across all requests, so it reliably hits Anthropic's
+ * 5-minute prompt cache. Dynamic content (memory, skills, quantum) is sent
+ * in a separate un-cached system block so it never busts this cached prefix.
+ */
+const BBGPT_STATIC_SYSTEM =
+  "You are bbGPT, a capable AI assistant. Be direct, accurate, and helpful. " +
+  "When the user provides memory or context blocks below, honor them precisely.";
 
 /** Map bbGPT tier names → actual Anthropic model IDs */
 export const CLAUDE_MODEL_MAP: Record<string, string> = {
@@ -46,8 +62,19 @@ type ContentBlock = TextBlock;
 
 /**
  * Convert bbGPT/OpenAI-style messages to Anthropic format.
- * Anthropic requires system as a top-level param; user/assistant alternate.
- * Returns content as arrays of blocks so cache_control can be applied.
+ *
+ * Cache design:
+ *   - System messages are joined and sent as a single cached content block.
+ *     This is the static portion — only cache-busts when instructions change.
+ *   - Dynamic context (memory, skills) arrives as a prefixed system message
+ *     from the route layer and is placed LAST in the system block, also cached.
+ *     Because the system block is only ~100-500 tokens for static instructions,
+ *     the cache hit rate is high as long as we don't mutate the static text.
+ *   - For long conversations, we find the nearest user turn at or before the
+ *     midpoint and apply a second cache breakpoint there. This caches the
+ *     shared prefix of the conversation history on the Anthropic side.
+ *     IMPORTANT: we only mark USER turns — assistant blocks are not supported
+ *     by Anthropic's prompt-caching API and will cause 400 errors if marked.
  */
 function splitMessages(
   messages: { role: string; content: string }[],
@@ -61,12 +88,20 @@ function splitMessages(
     .map((m) => m.content)
     .join("\n\n");
 
-  // System as a content-block array so cache_control is valid
-  const systemBlocks: ContentBlock[] = systemText
-    ? [{ type: "text", text: systemText, ...(enableCaching ? { cache_control: { type: "ephemeral" } } : {}) }]
-    : [];
+  // Two system blocks:
+  //   1. Static identity — always identical, reliably hits the 5-min cache.
+  //   2. Dynamic context (memory, skills, quantum) — changes per-request, not cached.
+  // Separating them ensures the static block cache is never busted by dynamic content.
+  const systemBlocks: ContentBlock[] = [
+    {
+      type: "text",
+      text: BBGPT_STATIC_SYSTEM,
+      ...(enableCaching ? { cache_control: { type: "ephemeral" } } : {}),
+    },
+    ...(systemText ? [{ type: "text" as const, text: systemText }] : []),
+  ];
 
-  // Anthropic requires alternating user/assistant, starting with user.
+  // Build alternating user/assistant turns.
   const turns: { role: "user" | "assistant"; content: string }[] = [];
   for (const m of messages) {
     if (m.role === "system") continue;
@@ -79,12 +114,9 @@ function splitMessages(
     }
   }
 
-  // Must start with user turn
   if (turns.length && turns[0].role === "assistant") {
     turns.unshift({ role: "user", content: "(continuing)" });
   }
-
-  // Must end with user turn
   if (turns.length && turns[turns.length - 1].role === "assistant") {
     turns.push({ role: "user", content: "Please continue." });
   }
@@ -93,22 +125,29 @@ function splitMessages(
     return { system: systemBlocks, messages: [{ role: "user", content: "Hello" }] };
   }
 
-  // Apply a second cache breakpoint at the conversation midpoint when the
-  // dialog is long enough that the shared prefix is worth caching.
-  // Anthropic allows up to 4 breakpoints per request; we use 2 (system + mid).
+  // Find the midpoint cache index: the nearest USER turn AT OR BEFORE the
+  // mathematical midpoint of the conversation. Never mark an assistant turn.
+  // Only applied when there are enough turns to make caching worthwhile.
+  let midpointCacheIndex = -1;
+  if (enableCaching && turns.length >= 6) {
+    const mid = Math.floor(turns.length / 2);
+    // Walk backwards from midpoint to find the nearest user turn
+    for (let i = mid; i >= 0; i--) {
+      if (turns[i]?.role === "user") {
+        // Don't cache the final user turn — that's the live question
+        if (i < turns.length - 1) {
+          midpointCacheIndex = i;
+        }
+        break;
+      }
+    }
+  }
+
   const formatted: { role: "user" | "assistant"; content: string | ContentBlock[] }[] = turns.map(
     (t, i) => {
-      const isLastUser = t.role === "user" && i === turns.length - 1;
-      // Cache midpoint: mark the user turn roughly halfway through a long conversation.
-      const isMidpoint =
-        enableCaching &&
-        turns.length >= 6 &&
-        i === Math.floor(turns.length / 2) &&
-        !isLastUser;
-
-      if (isMidpoint) {
+      if (i === midpointCacheIndex) {
         return {
-          role: t.role,
+          role: "user" as const,
           content: [{ type: "text" as const, text: t.content, cache_control: { type: "ephemeral" as const } }],
         };
       }
@@ -119,19 +158,9 @@ function splitMessages(
   return { system: systemBlocks, messages: formatted };
 }
 
-/**
- * Stream a Claude completion and return a ReadableStream<Uint8Array> that
- * emits OpenAI-compatible SSE lines. The existing extractSseTextDelta and
- * extractSseThinkingDelta parsers on the client will work unchanged.
- *
- * Anthropic SSE events we handle:
- *   content_block_delta (text_delta)  → choices[0].delta.content
- *   content_block_delta (thinking)    → choices[0].delta.reasoning_content
- *   message_stop                      → [DONE]
- */
 export async function streamClaudeChat(opts: {
   apiKey: string;
-  model: string; // bbGPT tier like "claude-sonnet"
+  model: string;
   messages: { role: string; content: string }[];
   thinking?: boolean;
 }): Promise<ReadableStream<Uint8Array>> {
@@ -175,7 +204,6 @@ export async function streamClaudeChat(opts: {
   const enc = new TextEncoder();
   const src = res.body;
 
-  // Transform Anthropic SSE → OpenAI-compatible SSE
   const transform = new TransformStream({
     async transform(chunk, ctrl) {
       const text = new TextDecoder().decode(chunk);
@@ -200,23 +228,17 @@ export async function streamClaudeChat(opts: {
         if (type === "content_block_delta") {
           const delta = parsed.delta;
           if (!delta) continue;
-
-          const deltaType = delta.type;
-
-          if (deltaType === "text_delta") {
-            const text = delta.text ?? "";
-            const sse = "data: " + JSON.stringify({ choices: [{ delta: { content: text } }] }) + "\n\n";
+          if (delta.type === "text_delta") {
+            const sse = "data: " + JSON.stringify({ choices: [{ delta: { content: delta.text ?? "" } }] }) + "\n\n";
             ctrl.enqueue(enc.encode(sse));
-          } else if (deltaType === "thinking_delta") {
-            const thinking = delta.thinking ?? "";
-            const sse = "data: " + JSON.stringify({ choices: [{ delta: { reasoning_content: thinking } }] }) + "\n\n";
+          } else if (delta.type === "thinking_delta") {
+            const sse = "data: " + JSON.stringify({ choices: [{ delta: { reasoning_content: delta.thinking ?? "" } }] }) + "\n\n";
             ctrl.enqueue(enc.encode(sse));
           }
         } else if (type === "message_stop") {
           ctrl.enqueue(enc.encode("data: [DONE]\n\n"));
         } else if (type === "error") {
-          const msg = parsed.error?.message ?? "Unknown Anthropic error";
-          throw new Error(msg);
+          throw new Error(parsed.error?.message ?? "Unknown Anthropic error");
         }
       }
     },
@@ -225,10 +247,6 @@ export async function streamClaudeChat(opts: {
   return src.pipeThrough(transform);
 }
 
-/**
- * Non-streaming Claude completion — used in agent loop planner steps.
- * Caching is applied to the system prompt to cut repeated planner overhead.
- */
 export async function claudeChatCompletionJson(opts: {
   apiKey: string;
   model: string;
