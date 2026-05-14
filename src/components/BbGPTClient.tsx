@@ -166,9 +166,31 @@ export default function BbGPTClient() {
   }, []);
 
   useEffect(() => {
-    const done = isIntroIntakeComplete();
-    setIntroGateOpen(!done);
-    setIntroIntakeDone(done);
+    // Check localStorage first for instant render, then reconcile with server.
+    const localDone = isIntroIntakeComplete();
+    setIntroGateOpen(!localDone);
+    setIntroIntakeDone(localDone);
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/profile/journey", { credentials: "include" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          source?: string;
+          complete?: boolean;
+          answers?: string[];
+          completedAt?: number;
+        };
+        if (data.source !== "server" || !data.complete || !Array.isArray(data.answers)) return;
+        // Server has answers — sync to localStorage and mark complete regardless of local state.
+        saveIntroIntake(data.answers);
+        setCompanionIntakeFromQuestionnaire(INTRO_SEVEN_QUESTIONS, data.answers);
+        setIntroGateOpen(false);
+        setIntroIntakeDone(true);
+      } catch {
+        // Non-fatal: local state is already set above.
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -1273,6 +1295,13 @@ export default function BbGPTClient() {
     setCompanionIntakeFromQuestionnaire(INTRO_SEVEN_QUESTIONS, answers);
     setIntroGateOpen(false);
     setIntroIntakeDone(true);
+    // Persist to server so answers survive browser clears and device switches.
+    void fetch("/api/profile/journey", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    }).catch(() => { /* non-fatal: localStorage already saved */ });
   }, []);
 
   const redoConnectionQuestionnaire = useCallback(() => {

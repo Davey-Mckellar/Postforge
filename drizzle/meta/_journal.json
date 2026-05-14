@@ -15,6 +15,13 @@
       "when": 1776960000000,
       "tag": "0001_auth_users",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1747180800000,
+      "tag": "0003_user_journey_answers",
+      "breakpoints": true
     }
   ]
 }

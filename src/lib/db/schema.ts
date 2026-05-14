@@ -16,6 +16,9 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 512 }).notNull().unique(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  /** Onboarding questionnaire answers — persisted per account so they survive browser clears and device switches. */
+  introAnswers: jsonb("intro_answers").$type<string[]>(),
+  introCompletedAt: timestamp("intro_completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
