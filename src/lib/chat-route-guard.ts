@@ -1,5 +1,5 @@
-import { assertAuthorized } from "@/lib/session-server";
-import { isGateEnabled } from "@/lib/server-config";
+import { assertAuthorized, getOptionalSessionEmail } from "@/lib/session-server";
+import { isAdminEmail, isGateEnabled } from "@/lib/server-config";
 import { readServerWallet, tryDebitServerWallet } from "@/lib/server-wallet";
 import { PLANS } from "@/lib/plans";
 import {
@@ -26,6 +26,9 @@ export async function guardChatSend(
   if (!isGateEnabled()) {
     return null;
   }
+  // Creator / admin bypass — no credit deduction, all features unlocked
+  const email = await getOptionalSessionEmail(request);
+  if (isAdminEmail(email)) return null;
 
   const wallet = await readServerWallet(request);
   const plan = PLANS[wallet.planId];
@@ -66,6 +69,8 @@ export async function guardChatSendBalanceOnly(
   if (!isGateEnabled()) {
     return null;
   }
+  const email = await getOptionalSessionEmail(request);
+  if (isAdminEmail(email)) return null;
 
   const wallet = await readServerWallet(request);
   const plan = PLANS[wallet.planId];
@@ -98,6 +103,8 @@ export async function guardDebate(request: NextRequest): Promise<NextResponse | 
   if (!isGateEnabled()) {
     return null;
   }
+  const email = await getOptionalSessionEmail(request);
+  if (isAdminEmail(email)) return null;
 
   const wallet = await readServerWallet(request);
   const plan = PLANS[wallet.planId];

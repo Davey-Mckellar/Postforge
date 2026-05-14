@@ -8,6 +8,8 @@ import { mapTierToOpenAIModel, openaiChatCompletionJson } from "./openai-api";
 import { claudeChatCompletionJson, isClaudeTier } from "./anthropic-api";
 import { openRouterChatCompletionJson } from "./openrouter-api";
 import { groqChatCompletionJson } from "./groq-api";
+import { cerebrasChatCompletionJson } from "./cerebras-api";
+import { metaLlamaChatCompletionJson } from "./meta-llama-api";
 import { routeWithKolmogorovDetailed } from "./kolmogorov-router";
 
 type Zai = InstanceType<typeof ZAI>;
@@ -57,6 +59,12 @@ export async function runReactAgentLoop(opts: {
   openrouterApiKey?: string;
   /** When set, planner steps use Groq free tier (JSON steps — zero-cost fallback). */
   groqApiKey?: string;
+  /** When set, planner steps use Cerebras (Llama — 1M tokens/day free). */
+  cerebrasApiKey?: string;
+  /** When set, planner steps use Meta Llama 4 API (waitlist — free when active). */
+  metaLlamaApiKey?: string;
+  /** When set, planner steps use OpenRouter free Llama 4 (:free tier). */
+  openrouterFreeApiKey?: string;
   /** User/assistant messages only (no leading system — added here) */
   messages: { role: "user" | "assistant" | "system"; content: string }[];
   preferredModel: ModelTier;
@@ -70,8 +78,8 @@ export async function runReactAgentLoop(opts: {
   routingReason: string;
   plannerModel: ModelTier;
 }> {
-  if (!opts.zai && !opts.openaiApiKey && !opts.anthropicApiKey && !opts.openrouterApiKey && !opts.groqApiKey) {
-    throw new Error("runReactAgentLoop: provide zai, openaiApiKey, anthropicApiKey, openrouterApiKey, or groqApiKey");
+  if (!opts.zai && !opts.openaiApiKey && !opts.anthropicApiKey && !opts.openrouterApiKey && !opts.openrouterFreeApiKey && !opts.metaLlamaApiKey && !opts.cerebrasApiKey && !opts.groqApiKey) {
+    throw new Error("runReactAgentLoop: provide at least one of: zai, openaiApiKey, anthropicApiKey, openrouterApiKey, cerebrasApiKey, metaLlamaApiKey, or groqApiKey");
   }
 
   const errorCorrectionLog: ErrorCorrectionLogEntry[] = [];
@@ -121,6 +129,24 @@ export async function runReactAgentLoop(opts: {
       // Claude path via OpenRouter — same result, no credit balance required
       text = await openRouterChatCompletionJson({
         apiKey: opts.openrouterApiKey,
+        model: plannerModel,
+        messages: dialog.map((m) => ({ role: m.role, content: m.content })),
+      });
+    } else if (opts.metaLlamaApiKey) {
+      text = await metaLlamaChatCompletionJson({
+        apiKey: opts.metaLlamaApiKey,
+        model: plannerModel,
+        messages: dialog.map((m) => ({ role: m.role, content: m.content })),
+      });
+    } else if (opts.cerebrasApiKey) {
+      text = await cerebrasChatCompletionJson({
+        apiKey: opts.cerebrasApiKey,
+        model: plannerModel,
+        messages: dialog.map((m) => ({ role: m.role, content: m.content })),
+      });
+    } else if (opts.openrouterFreeApiKey) {
+      text = await openRouterChatCompletionJson({
+        apiKey: opts.openrouterFreeApiKey,
         model: plannerModel,
         messages: dialog.map((m) => ({ role: m.role, content: m.content })),
       });

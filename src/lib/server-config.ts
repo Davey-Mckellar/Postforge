@@ -41,3 +41,18 @@ export function getApiSecret(): string | undefined {
 export function getSessionSecret(): string | undefined {
   return normalizeEnvString(process.env.BBGPT_SESSION_SECRET ?? process.env.BABYGPT_SESSION_SECRET);
 }
+
+/**
+ * Returns the set of admin email addresses (comma-separated BBGPT_ADMIN_EMAILS env var).
+ * Admins bypass all credit checks and plan restrictions.
+ */
+export function getAdminEmails(): Set<string> {
+  const raw = process.env.BBGPT_ADMIN_EMAILS?.trim();
+  if (!raw) return new Set();
+  return new Set(raw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean));
+}
+
+export function isAdminEmail(email: string | undefined): boolean {
+  if (!email) return false;
+  return getAdminEmails().has(email.toLowerCase());
+}

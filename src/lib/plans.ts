@@ -32,7 +32,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     id: "free",
     label: "Free",
     subtitle: "Try the core chat experience",
-    monthlyCredits: 400,
+    monthlyCredits: 600,
     allowedModels: ["glm-4-flash"],
     modelHighlights: {
       "glm-4-flash": "Fast default — included",
@@ -55,7 +55,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     id: "starter",
     label: "Starter",
     subtitle: "Stronger models + agent tools",
-    monthlyCredits: 4_000,
+    monthlyCredits: 6_000,
     allowedModels: ["glm-4-flash", "glm-4-air", "glm-4-plus"],
     modelHighlights: {
       "glm-4-flash": "Quick answers",
@@ -128,7 +128,7 @@ export const DEFAULT_PLAN: PlanId = "free";
 export const PLAN_IDS_IN_UI_ORDER: readonly PlanId[] = ["free", "starter", "pro", "team"];
 
 /** One-time welcome grant so new users can explore credit spend before monthly accrual. */
-export const FIRST_VISIT_CREDIT_BONUS = 120;
+export const FIRST_VISIT_CREDIT_BONUS = 500;
 
 export function planAllowsModel(plan: PlanDefinition, model: ModelTier): boolean {
   return plan.allowedModels.includes(model);

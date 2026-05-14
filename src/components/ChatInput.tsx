@@ -292,9 +292,9 @@ export function ChatInput({
               void submit();
             }
           }}
-          rows={2}
+          rows={3}
           placeholder="Message bbGPT…"
-          className="min-h-[44px] min-w-0 flex-1 resize-y rounded-2xl bg-zinc-900/60 px-3 py-2.5 text-sm leading-relaxed text-zinc-100 outline-none ring-1 ring-zinc-800 placeholder:text-zinc-600 focus:ring-cyan-500/30 disabled:opacity-50"
+          className="min-h-[56px] min-w-0 flex-1 resize-y rounded-2xl bg-zinc-900/60 px-4 py-3 text-base leading-relaxed text-zinc-100 outline-none ring-1 ring-zinc-800 placeholder:text-zinc-500 focus:ring-cyan-500/30 disabled:opacity-50"
         />
 
         {/* ChatGPT-style circular voice control */}
@@ -324,7 +324,7 @@ export function ChatInput({
           type="button"
           disabled={disabled || (!value.trim() && pendingFiles.length === 0)}
           onClick={() => void submit()}
-          className="h-11 shrink-0 rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 sm:h-12 sm:px-5"
+          className="h-12 shrink-0 rounded-2xl bg-emerald-600 px-5 text-base font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 sm:h-[58px] sm:px-6"
         >
           Send
         </button>

@@ -95,6 +95,12 @@ export async function POST(req: NextRequest) {
         ? { ...agentOpts, anthropicApiKey: llm.apiKey }
         : llm.provider === "openrouter"
         ? { ...agentOpts, openrouterApiKey: llm.apiKey }
+        : llm.provider === "openrouter-free"
+        ? { ...agentOpts, openrouterFreeApiKey: llm.apiKey }
+        : llm.provider === "meta-llama"
+        ? { ...agentOpts, metaLlamaApiKey: llm.apiKey }
+        : llm.provider === "cerebras"
+        ? { ...agentOpts, cerebrasApiKey: llm.apiKey }
         : llm.provider === "groq"
         ? { ...agentOpts, groqApiKey: llm.apiKey }
         : { ...agentOpts, openaiApiKey: (llm as { apiKey: string }).apiKey },

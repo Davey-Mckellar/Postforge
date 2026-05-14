@@ -31,6 +31,11 @@ const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const CACHE_BETA = "prompt-caching-2024-07-31";
 const THINKING_BETA = "interleaved-thinking-2025-05-14";
+// Compaction API (beta Jan 2026): Claude automatically summarizes old context
+// when approaching the token limit — enables effectively infinite conversations.
+// Supported on claude-sonnet-4-6 and claude-opus-4-6 only.
+const COMPACTION_BETA = "compact-2026-01-12";
+const COMPACTION_SUPPORTED_MODELS = new Set(["claude-sonnet-4-6", "claude-opus-4-6"]);
 
 /**
  * Static identity sent on every Claude request.
@@ -172,7 +177,12 @@ export async function streamClaudeChat(opts: {
       ? { thinking: { type: "enabled", budget_tokens: 8000 } }
       : {};
 
-  const betaHeaders = [CACHE_BETA, ...(opts.thinking ? [THINKING_BETA] : [])].join(",");
+  const supportsCompaction = COMPACTION_SUPPORTED_MODELS.has(claudeModel);
+  const betaHeaders = [
+    CACHE_BETA,
+    ...(opts.thinking ? [THINKING_BETA] : []),
+    ...(supportsCompaction ? [COMPACTION_BETA] : []),
+  ].join(",");
 
   const body: Record<string, unknown> = {
     model: claudeModel,
@@ -180,6 +190,9 @@ export async function streamClaudeChat(opts: {
     stream: true,
     messages,
     ...thinkingParam,
+    // Compaction: Claude summarizes old context automatically when approaching limit.
+    // Only sent when the model supports it — Haiku is excluded.
+    ...(supportsCompaction ? { context_management: { type: "auto" } } : {}),
   };
   if (system.length) body.system = system;
 

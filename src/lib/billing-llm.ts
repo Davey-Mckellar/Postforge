@@ -3,6 +3,8 @@ import { openaiChatCompletionJson, pickChatTextFromCompletion } from "@/lib/open
 import { claudeChatCompletionJson } from "@/lib/anthropic-api";
 import { openRouterChatCompletionJson } from "@/lib/openrouter-api";
 import { groqChatCompletionJson } from "@/lib/groq-api";
+import { cerebrasChatCompletionJson } from "@/lib/cerebras-api";
+import { metaLlamaChatCompletionJson } from "@/lib/meta-llama-api";
 
 export async function completeBillingText(opts: {
   system: string;
@@ -55,7 +57,35 @@ export async function completeBillingText(opts: {
       return { text: text.trim() };
     }
 
+    if (llm.provider === "cerebras") {
+      const text = await cerebrasChatCompletionJson({
+        apiKey: llm.apiKey,
+        model: "claude-haiku",
+        messages,
+      });
+      return { text: text.trim() };
+    }
+
+    if (llm.provider === "meta-llama") {
+      const text = await metaLlamaChatCompletionJson({
+        apiKey: llm.apiKey,
+        model: "claude-haiku",
+        messages,
+      });
+      return { text: text.trim() };
+    }
+
+    if (llm.provider === "openrouter-free") {
+      const text = await openRouterChatCompletionJson({
+        apiKey: llm.apiKey,
+        model: "claude-haiku",
+        messages,
+      });
+      return { text: text.trim() };
+    }
+
     // Z.AI / GLM
+    if (llm.provider !== "zai") return { error: "Unsupported provider" };
     const zai = llm.zai;
     const raw = await zai.chat.completions.create({
       model: "glm-4-flash",

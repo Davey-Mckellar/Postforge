@@ -4,10 +4,12 @@ import { guardChatSend, guardDebate } from "./chat-route-guard";
 
 vi.mock("@/lib/session-server", () => ({
   assertAuthorized: vi.fn(),
+  getOptionalSessionEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/server-config", () => ({
   isGateEnabled: vi.fn(),
+  isAdminEmail: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("@/lib/server-wallet", () => ({
@@ -16,7 +18,7 @@ vi.mock("@/lib/server-wallet", () => ({
 }));
 
 import { assertAuthorized } from "@/lib/session-server";
-import { isGateEnabled } from "@/lib/server-config";
+import { isAdminEmail, isGateEnabled } from "@/lib/server-config";
 import { readServerWallet, tryDebitServerWallet } from "@/lib/server-wallet";
 import { PLANS } from "@/lib/plans";
 
@@ -28,6 +30,7 @@ describe("guardChatSend", () => {
   beforeEach(() => {
     vi.mocked(assertAuthorized).mockResolvedValue(null);
     vi.mocked(isGateEnabled).mockReturnValue(false);
+    vi.mocked(isAdminEmail).mockReturnValue(false);
     vi.mocked(readServerWallet).mockReset();
     vi.mocked(tryDebitServerWallet).mockReset();
   });
@@ -54,6 +57,20 @@ describe("guardChatSend", () => {
     });
     expect(out?.status).toBe(401);
     expect(readServerWallet).not.toHaveBeenCalled();
+  });
+
+  it("returns null for admin email (bypasses credits entirely)", async () => {
+    vi.mocked(isGateEnabled).mockReturnValue(true);
+    vi.mocked(assertAuthorized).mockResolvedValue(null);
+    vi.mocked(isAdminEmail).mockReturnValue(true);
+    const out = await guardChatSend(req(), {
+      model: "glm-4-flash",
+      thinking: false,
+      mode: "chat",
+    });
+    expect(out).toBeNull();
+    expect(readServerWallet).not.toHaveBeenCalled();
+    expect(tryDebitServerWallet).not.toHaveBeenCalled();
   });
 
   it("returns 403 when quantum DNA not on plan", async () => {
@@ -177,6 +194,7 @@ describe("guardDebate", () => {
   beforeEach(() => {
     vi.mocked(assertAuthorized).mockResolvedValue(null);
     vi.mocked(isGateEnabled).mockReturnValue(false);
+    vi.mocked(isAdminEmail).mockReturnValue(false);
     vi.mocked(readServerWallet).mockReset();
     vi.mocked(tryDebitServerWallet).mockReset();
   });

@@ -3,8 +3,10 @@ import { buildHolographicMessages } from "@/lib/holographic-context";
 import { resolveLlm } from "@/lib/llm-resolve";
 import { mapTierToOpenAIModel, streamOpenAIChat } from "@/lib/openai-api";
 import { streamClaudeChat, isClaudeTier } from "@/lib/anthropic-api";
-import { streamOpenRouterChat } from "@/lib/openrouter-api";
+import { streamOpenRouterChat, streamOpenRouterFreeChat } from "@/lib/openrouter-api";
 import { streamGroqChat } from "@/lib/groq-api";
+import { streamCerebrasChat } from "@/lib/cerebras-api";
+import { streamMetaLlamaChat } from "@/lib/meta-llama-api";
 import { mergeOpenAiThinkingDirective } from "@/lib/openai-thinking";
 import { routeWithKolmogorovDetailed } from "@/lib/kolmogorov-router";
 import { extractStyleDNA } from "@/lib/user-dna";
@@ -138,6 +140,42 @@ export async function POST(req: NextRequest) {
           "X-bbGPT-Provider": "openrouter",
           "X-bbGPT-Claude-Model": routed,
         },
+      });
+    }
+
+    // -- Meta Llama (Llama 4 Maverick/Scout — waitlist, free when active) -----
+    if (llm.provider === "meta-llama") {
+      const stream = await streamMetaLlamaChat({
+        apiKey: llm.apiKey,
+        model: routed,
+        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+      });
+      return new Response(stream, {
+        headers: { ...commonHeaders, "X-bbGPT-Provider": "meta-llama" },
+      });
+    }
+
+    // -- Cerebras (Llama — 1M tokens/day free) --------------------------------
+    if (llm.provider === "cerebras") {
+      const stream = await streamCerebrasChat({
+        apiKey: llm.apiKey,
+        model: routed,
+        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+      });
+      return new Response(stream, {
+        headers: { ...commonHeaders, "X-bbGPT-Provider": "cerebras" },
+      });
+    }
+
+    // -- OpenRouter free Llama 4 (:free tier — no balance needed) -------------
+    if (llm.provider === "openrouter-free") {
+      const stream = await streamOpenRouterFreeChat({
+        apiKey: llm.apiKey,
+        model: routed,
+        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+      });
+      return new Response(stream, {
+        headers: { ...commonHeaders, "X-bbGPT-Provider": "openrouter-free" },
       });
     }
 
