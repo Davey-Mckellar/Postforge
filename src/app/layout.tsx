@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   description:
     "bbGPT — a dark conversational assistant with quantum-inspired controls. Not affiliated with OpenAI.",
   icons: { icon: "/bbgpt-logo.png" },
+  verification: {
+    google: "q9lmpfsDvRswCT1dz_u2AsIdNFJlMsG-AgJ8CXjYp0Y",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
