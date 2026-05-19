@@ -15,15 +15,27 @@ let singleton: AppDatabase | undefined;
  */
 export function getDb(): AppDatabase {
   if (!singleton) {
-    const url =
+    const rawUrl =
       process.env.DATABASE_URL?.trim() ||
       process.env.POSTGRES_URL?.trim();
-    if (!url) {
+    if (!rawUrl) {
       throw new Error(
         "Database URL missing: set POSTGRES_URL or DATABASE_URL for Postgres persistence.",
       );
     }
-    const client = postgres(url, { max: 10 });
+    // Strip channel_binding param — not supported by postgres.js / PgBouncer and causes
+    // connection failures on Neon pooler URLs injected by the Vercel integration.
+    const url = rawUrl
+      .replace(/([?&])channel_binding=[^&]*/g, (_, sep) => sep === "?" ? "?" : "")
+      .replace(/\?&/, "?")
+      .replace(/\?$/, "");
+    const client = postgres(url, {
+      ssl: "require",
+      // Neon pooler (PgBouncer) does not support prepared statements.
+      // Without this, every query fails with "prepared statement does not exist".
+      prepare: false,
+      max: 10,
+    });
     singleton = drizzle(client, { schema });
   }
   return singleton;

@@ -35,7 +35,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Email and password required." }, { status: 400 });
       }
 
-      const user = await verifyUserCredentials(email, password);
+      let user: Awaited<ReturnType<typeof verifyUserCredentials>>;
+      try {
+        user = await verifyUserCredentials(email, password);
+      } catch (dbErr) {
+        console.error("LOGIN_DB_ERROR:", dbErr instanceof Error ? dbErr.message : String(dbErr));
+        return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+      }
       if (!user) {
         return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
       }
