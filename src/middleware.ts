@@ -75,6 +75,10 @@ export default async function middleware(request: NextRequest) {
   ) {
     return NextResponse.next();
   }
+  // SEO infrastructure — sitemap and robots must be publicly accessible
+  if (pathname === "/sitemap.xml" || pathname === "/robots.txt") {
+    return NextResponse.next();
+  }
   if (pathname.startsWith("/api/auth/")) {
     return NextResponse.next();
   }
