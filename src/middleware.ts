@@ -54,11 +54,24 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // ── Public pages (auth gate bypassed) ──────────────────────────────────────
+  // Auth pages
   if (
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password"
+  ) {
+    return NextResponse.next();
+  }
+  // SEO / marketing landing pages — must be publicly crawlable by Googlebot
+  if (
+    pathname === "/chatgpt-alternative" ||
+    pathname === "/claude-alternative" ||
+    pathname === "/gemini-alternative" ||
+    pathname === "/perplexity-alternative" ||
+    pathname === "/ai-chat-credits" ||
+    pathname === "/ai-developer-alex"
   ) {
     return NextResponse.next();
   }

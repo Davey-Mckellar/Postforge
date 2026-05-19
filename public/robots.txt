@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /checkout/
+
+Sitemap: https://www.bbgpt.ai/sitemap.xml
