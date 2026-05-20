@@ -1,0 +1,10 @@
+﻿eb733d4 fix: ungate sitemap.xml and robots.txt in middleware
+2ccfcd1 chore: add Google Search Console HTML tag verification
+318eafd chore: add Google Search Console verification file
+d2323b7 fix: ungate SEO pages in middleware + add /ai-developer-alex page, sitemap, robots.txt
+1dd412d feat: Cerebras + Meta Llama APIs, admin credit bypass, UI text sizing, Anthropic compaction
+b265c78 fix: correct prompt caching and context trimming ΓÇö 5 issues resolved
+eaed0f6 feat: prompt caching, context trimming, and expanded test suite
+e3cefa1 feat(profile): persist questionnaire answers to DB per user account
+c9cfe4f merge: cursor branch ΓåÆ main (all fixes + new features)
+5b0ec27 fix: escape apostrophes in JSX (lint errors)

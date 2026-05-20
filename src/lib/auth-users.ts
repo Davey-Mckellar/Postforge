@@ -82,6 +82,7 @@ export async function registerUser(emailRaw: string, password: string): Promise<
       return { error: "An account with this email already exists." };
     }
     console.error("[registerUser]", msg);
-    return { error: msg };
+    return { error: "Registration failed." };
   }
 }
+

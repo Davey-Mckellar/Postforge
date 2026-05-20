@@ -1,0 +1,25 @@
+﻿Existing columns: intro_answers, intro_completed_at
+Already exists: intro_answers
+Already exists: intro_completed_at
+DONE ΓÇö migration complete.
+node : node:fs:2426
+At line:1 char:42
++ ... ation 'C:\Users\mckel\postforge'; node run-migration.mjs 2>&1 | Out-F ...
++                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:fs:2426:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    return binding.writeFileUtf8(
+                   ^
+
+Error: EBUSY: resource busy or locked, open 'C:\Users\mckel\postforge\migrate-result.txt'
+    at writeFileSync (node:fs:2426:20)
+    at file:///C:/Users/mckel/postforge/run-migration.mjs:42:3
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  errno: -4082,
+  code: 'EBUSY',
+  syscall: 'open',
+  path: 'C:\\Users\\mckel\\postforge\\migrate-result.txt'
+}
+
+Node.js v22.14.0
