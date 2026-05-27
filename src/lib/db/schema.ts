@@ -52,3 +52,13 @@ export const userWallets = pgTable("user_wallets", {
 
 export type UserWalletRow = typeof userWallets.$inferSelect;
 export type UserWalletInsert = typeof userWallets.$inferInsert;
+
+/** Org workspace — activation gating for middleware / onboarding. */
+export const organizations = pgTable("organizations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerId: uuid("owner_id").notNull(),
+  activationStatus: varchar("activation_status", { length: 64 }).notNull().default("PENDING"),
+});
+
+export type OrganizationRow = typeof organizations.$inferSelect;
+export type OrganizationInsert = typeof organizations.$inferInsert;
