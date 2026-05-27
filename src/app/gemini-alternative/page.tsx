@@ -70,7 +70,7 @@ export default function GeminiAlternativePage() {
         <div className="inline-block mb-6 px-4 py-1.5 rounded-full border border-violet-800 bg-violet-900/20 text-violet-400 text-sm font-medium">
           Gemini Alternative
         </div>
-        <h1 className="text-5xl md:text-6xl font-black tracking-tight mb-6 leading-tight">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-6 leading-tight">
           A Gemini Alternative With{" "}
           <span className="bg-gradient-to-r from-violet-400 to-cyan-500 bg-clip-text text-transparent">
             Every Other AI Too
@@ -100,7 +100,7 @@ export default function GeminiAlternativePage() {
       {/* Comparison table */}
       <section className="max-w-3xl mx-auto px-6 pb-20">
         <h2 className="text-3xl font-bold text-center mb-10">bbGPT vs Google Gemini</h2>
-        <div className="rounded-2xl border border-zinc-800 overflow-hidden">
+        <div className="rounded-2xl border border-zinc-800 overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900/60">

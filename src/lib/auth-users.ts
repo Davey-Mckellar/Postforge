@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { normalizeEmail } from "@/lib/email-normalize";
 import { getDb } from "@/lib/db";
-import { users, userWallets, type UserRow } from "@/lib/db/schema";
+import { users, userWallets, organizations, type UserRow } from "@/lib/db/schema";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import {
   defaultWalletState,
@@ -44,6 +44,8 @@ export async function updateUserPasswordHash(userId: string, passwordHash: strin
 
 /**
  * Creates user row + wallet row (`clerk_id` = user id, email duplicated for Stripe UX).
+ * Both inserts are wrapped in a single transaction — if the wallet insert fails,
+ * the user row is rolled back so no orphaned accounts are created.
  */
 export async function registerUser(emailRaw: string, password: string): Promise<{ user: UserRow } | { error: string }> {
   const email = normalizeEmail(emailRaw);
@@ -54,28 +56,40 @@ export async function registerUser(emailRaw: string, password: string): Promise<
 
   try {
     const db = getDb();
-    const [created] = await db
-      .insert(users)
-      .values({
+    const user = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(users)
+        .values({
+          email,
+          passwordHash,
+        })
+        .returning();
+
+      if (!created) throw new Error("Could not create account.");
+
+      const base = hydrateServerWallet(defaultWalletState());
+      await tx.insert(userWallets).values({
+        clerkId: created.id,
         email,
-        passwordHash,
-      })
-      .returning();
+        credits: base.balance,
+        planId: base.planId,
+        accrualMonth: base.accrualMonth ?? walletMonthKey(),
+        welcomeApplied: base.welcomeApplied,
+        walletVersion: base.version,
+      });
 
-    if (!created) return { error: "Could not create account." };
+      await tx.insert(organizations).values({
+        ownerId: created.id,
+        name: email,
+        planId: "free",
+        aiCredits: 600,
+        activationStatus: "PENDING",
+      });
 
-    const base = hydrateServerWallet(defaultWalletState());
-    await db.insert(userWallets).values({
-      clerkId: created.id,
-      email,
-      credits: base.balance,
-      planId: base.planId,
-      accrualMonth: base.accrualMonth ?? walletMonthKey(),
-      welcomeApplied: base.welcomeApplied,
-      walletVersion: base.version,
+      return created;
     });
 
-    return { user: created };
+    return { user };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes("unique") || msg.includes("duplicate")) {
@@ -85,4 +99,3 @@ export async function registerUser(emailRaw: string, password: string): Promise<
     return { error: "Registration failed." };
   }
 }
-

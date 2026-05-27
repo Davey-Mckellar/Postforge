@@ -12,6 +12,8 @@ import { routeWithKolmogorovDetailed } from "@/lib/kolmogorov-router";
 import { extractStyleDNA } from "@/lib/user-dna";
 import { adiabaticSystemPrompt } from "@/lib/adiabatic-prompt";
 import { guardChatSend } from "@/lib/chat-route-guard";
+import { validatePlanLimit, PlanLimitError } from "@/lib/validate-plan-limit";
+import { InsufficientCreditsError } from "@/services/credit-accounting";
 import { parseModelTierBody } from "@/lib/model-tier";
 import { trimContext } from "@/lib/context-trim";
 import type { ChatMessage, ModelTier } from "@/lib/types";
@@ -50,6 +52,21 @@ export async function POST(req: NextRequest) {
   const llm = resolveLlm(model);
   if (llm.provider === "none") {
     return NextResponse.json({ error: llm.message }, { status: 503 });
+  }
+
+  // Org-level plan + credit gate (runs alongside wallet guard during transition)
+  const orgId = req.headers.get("x-organization-id");
+  if (orgId) {
+    try {
+      await validatePlanLimit(orgId, "AI_GENERATION");
+    } catch (err) {
+      if (err instanceof PlanLimitError) {
+        return NextResponse.json({ error: err.message, upgradeRequired: true }, { status: 403 });
+      }
+      if (err instanceof InsufficientCreditsError) {
+        return NextResponse.json({ error: "Insufficient credits", required: err.required, available: err.available, upgradeRequired: true }, { status: 402 });
+      }
+    }
   }
 
   const gated = await guardChatSend(req, {

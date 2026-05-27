@@ -71,7 +71,7 @@ export default function PerplexityAlternativePage() {
         <div className="inline-block mb-6 px-4 py-1.5 rounded-full border border-emerald-800 bg-emerald-900/20 text-emerald-400 text-sm font-medium">
           Perplexity Alternative
         </div>
-        <h1 className="text-5xl md:text-6xl font-black tracking-tight mb-6 leading-tight">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-6 leading-tight">
           Deep Research{" "}
           <span className="bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent">
             Plus Every AI Model
@@ -127,7 +127,7 @@ export default function PerplexityAlternativePage() {
         <h2 className="text-3xl font-bold text-center mb-10">
           bbGPT vs Perplexity — Side by Side
         </h2>
-        <div className="rounded-2xl border border-zinc-800 overflow-hidden">
+        <div className="rounded-2xl border border-zinc-800 overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900/60">
