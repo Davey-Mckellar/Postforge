@@ -49,6 +49,23 @@ html.bbgpt-appearance-light .bbgpt-app-root header .bbgpt-header-btn {
   @apply bg-white text-zinc-900 ring-zinc-300 hover:bg-zinc-100;
 }
 
+.bbgpt-markdown {
+  /* Readable on mobile (16px), slightly tighter on desktop to match bubble base */
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+@media (min-width: 640px) {
+  .bbgpt-markdown {
+    font-size: 0.9375rem; /* 15px — matches sm:text-[15px] on the bubble */
+  }
+}
+
+/* Ensure headings scale down gracefully on small screens */
+.bbgpt-markdown h1 { font-size: 1.35rem; }
+.bbgpt-markdown h2 { font-size: 1.2rem; }
+.bbgpt-markdown h3 { font-size: 1.05rem; }
+
 .bbgpt-markdown pre {
   @apply overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-sm;
 }
@@ -59,6 +76,21 @@ html.bbgpt-appearance-light .bbgpt-app-root header .bbgpt-header-btn {
 
 .bbgpt-markdown pre code {
   @apply bg-transparent p-0;
+}
+
+/* Tables — scroll horizontally on mobile instead of overflowing the bubble */
+.bbgpt-markdown table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Paragraph spacing that breathes on mobile */
+.bbgpt-markdown p {
+  margin-top: 0.6rem;
+  margin-bottom: 0.6rem;
 }
 
 /* Voice overlay — Grok-like eyes + waveform (see VoiceModeOverlay) */

@@ -294,7 +294,7 @@ export function ChatInput({
           }}
           rows={3}
           placeholder="Message bbGPT…"
-          className="min-h-[56px] min-w-0 flex-1 resize-y rounded-2xl bg-zinc-900/60 px-4 py-3 text-base leading-relaxed text-zinc-100 outline-none ring-1 ring-zinc-800 placeholder:text-zinc-500 focus:ring-cyan-500/30 disabled:opacity-50"
+          className="min-h-[64px] min-w-0 flex-1 resize-y rounded-2xl bg-zinc-900/60 px-4 py-3 text-base leading-relaxed text-zinc-100 outline-none ring-1 ring-zinc-800 placeholder:text-zinc-500 focus:ring-cyan-500/30 disabled:opacity-50 sm:min-h-[56px]"
         />
 
         {/* ChatGPT-style circular voice control */}

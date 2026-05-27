@@ -4,6 +4,9 @@ import "./globals.css";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  /** Allow pinch-to-zoom up to 5× — without this iOS Safari silently blocks zoom. */
+  maximumScale: 5,
+  userScalable: true,
   viewportFit: "cover",
   /** Helps Android Chrome resize the layout when the soft keyboard opens (keeps composer in view). */
   interactiveWidget: "resizes-content",

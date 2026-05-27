@@ -143,7 +143,7 @@ export function MessageBubble({
 
       <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
         <div
-          className={`max-w-[min(760px,93vw)] rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed ${
+          className={`max-w-[min(760px,93vw)] rounded-2xl px-4 py-3 text-base leading-relaxed sm:px-5 sm:py-3.5 sm:text-[15px] ${
             isUser
               ? "bg-emerald-600/25 text-zinc-100 ring-1 ring-emerald-500/30"
               : "bg-zinc-900/80 text-zinc-100 ring-1 ring-zinc-800"
