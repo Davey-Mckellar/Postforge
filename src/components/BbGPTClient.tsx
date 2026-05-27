@@ -1486,7 +1486,7 @@ export default function BbGPTClient() {
           />
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 md:w-auto">
+        <div className="hidden w-full min-w-0 flex-wrap items-center justify-end gap-2 md:flex md:w-auto">
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -1691,17 +1691,19 @@ export default function BbGPTClient() {
             onAttachmentLimitChange={setAttachmentLimitPersist}
           >
             {credits ? (
-              <CostPreview
-                balance={credits.balance}
-                model={model}
-                thinking={previewThinking}
-                mode={previewMode}
-                contextHint={
-                  pendingFiles.length > 0
-                    ? "Pending files: priced as one Gemini multimodal send (chat credits, Thinking off)."
-                    : undefined
-                }
-              />
+              <div className="hidden sm:block">
+                <CostPreview
+                  balance={credits.balance}
+                  model={model}
+                  thinking={previewThinking}
+                  mode={previewMode}
+                  contextHint={
+                    pendingFiles.length > 0
+                      ? "Pending files: priced as one Gemini multimodal send (chat credits, Thinking off)."
+                      : undefined
+                  }
+                />
+              </div>
             ) : null}
           </ChatInput>
         </div>
@@ -1861,7 +1863,7 @@ export default function BbGPTClient() {
           }}
         />
       ) : null}
-      <footer className={`${footerShellClass(appearance)} text-[9px] leading-tight sm:text-[10px]`}>
+      <footer className={`hidden sm:block ${footerShellClass(appearance)} text-[9px] leading-tight sm:text-[10px]`}>
         <span className="text-zinc-500">v{APP_VERSION}</span>
         {" · "}
         bbGPT is not affiliated with or endorsed by OpenAI. &quot;ChatGPT&quot; is a trademark of OpenAI.

@@ -331,7 +331,7 @@ export function ChatInput({
       </div>
 
       <div
-        className={`mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-900/80 pt-1.5 text-[10px] text-zinc-600 ${col}`}
+        className={`mt-1.5 hidden flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-900/80 pt-1.5 text-[10px] text-zinc-600 sm:flex ${col}`}
       >
         <p
           className="min-w-0 flex-1 leading-snug"
