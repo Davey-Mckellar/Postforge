@@ -42,3 +42,27 @@ export function getDb(): AppDatabase {
 }
 
 export { schema };
+
+export {
+  organizations,
+  brands,
+  aiRuns,
+  aiUsageLedger,
+  contentBatches,
+  drafts,
+  scheduledPosts,
+  type OrganizationRow,
+  type OrganizationInsert,
+  type BrandRow,
+  type BrandInsert,
+  type AiRunRow,
+  type AiRunInsert,
+  type AiUsageLedgerRow,
+  type AiUsageLedgerInsert,
+  type ContentBatchRow,
+  type ContentBatchInsert,
+  type DraftRow,
+  type DraftInsert,
+  type ScheduledPostRow,
+  type ScheduledPostInsert,
+} from "@/lib/db/schema";
