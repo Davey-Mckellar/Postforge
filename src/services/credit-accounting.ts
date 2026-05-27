@@ -1,4 +1,4 @@
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/index";
 import { aiRuns, aiUsageLedger, organizations } from "@/lib/db/schema";
 
@@ -23,7 +23,7 @@ export async function reserveCredits(
   return db.transaction(async (tx) => {
     const updated = await tx
       .update(organizations)
-      .set({ aiCredits: organizations.aiCredits - estimatedCredits } as never)
+      .set({ aiCredits: sql`${organizations.aiCredits} - ${estimatedCredits}` })
       .where(and(eq(organizations.id, organizationId), gte(organizations.aiCredits, estimatedCredits)))
       .returning({ aiCredits: organizations.aiCredits });
 
@@ -65,7 +65,7 @@ export async function reconcileCredits(
 
     if (diff > 0) {
       await tx.update(organizations)
-        .set({ aiCredits: organizations.aiCredits + diff } as never)
+        .set({ aiCredits: sql`${organizations.aiCredits} + ${diff}` })
         .where(eq(organizations.id, run.organizationId));
     }
 
@@ -91,7 +91,7 @@ export async function refundReservation(aiRunId: string, reason?: string): Promi
     if (!run || run.reservedCredits === 0) return;
 
     await tx.update(organizations)
-      .set({ aiCredits: organizations.aiCredits + run.reservedCredits } as never)
+      .set({ aiCredits: sql`${organizations.aiCredits} + ${run.reservedCredits}` })
       .where(eq(organizations.id, run.organizationId));
 
     await tx.update(aiRuns)

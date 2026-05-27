@@ -42,12 +42,13 @@ function rowToBilling(row: UserWalletRow): ServerBillingRecord {
   };
 }
 
-async function insertDefaultRow(clerkId: string): Promise<UserWalletRow> {
+async function insertDefaultRow(clerkId: string, email = ""): Promise<UserWalletRow> {
   const base = hydrateServerWallet(defaultWalletState());
   const [inserted] = await getDb()
     .insert(userWallets)
     .values({
       clerkId,
+      email,
       credits: base.balance,
       planId: base.planId,
       accrualMonth: base.accrualMonth,

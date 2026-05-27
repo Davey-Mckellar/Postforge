@@ -44,6 +44,12 @@ export function getDb(): AppDatabase {
 export { schema };
 
 export {
+  users,
+  userWallets,
+  type UserRow,
+  type UserInsert,
+  type UserWalletRow,
+  type UserWalletInsert,
   organizations,
   brands,
   aiRuns,
