@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/index";
 import { brands } from "@/lib/db/schema";
+import type { VoiceProfile } from "@/lib/voice-profile";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const { brandId } = await params;
 
-  let body: { name?: string; voiceProfile?: Record<string, unknown> };
+  let body: { name?: string; voiceProfile?: VoiceProfile };
   try {
     body = (await req.json()) as typeof body;
   } catch {

@@ -22,19 +22,13 @@ import {
   InsufficientCreditsError,
 } from "@/services/credit-accounting";
 import { validatePlanLimit, PlanLimitError } from "@/lib/validate-plan-limit";
+import type { VoiceProfile } from "@/lib/voice-profile";
+
+export type { VoiceProfile } from "@/lib/voice-profile";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface VoiceProfile {
-  niche?: string;
-  tone?: string;
-  audience?: string;
-  pillars?: string[];
-  hashtags?: string[];
-  avoid?: string;
-}
 
 export interface GeneratedDraft {
   caption: string;
@@ -113,7 +107,7 @@ export async function generateContentBatch(
 
   if (!brand) throw new Error(`Brand ${brandId} not found`);
 
-  const prompt = buildBatchPrompt(brand as { name: string; voiceProfile: VoiceProfile | null });
+  const prompt = buildBatchPrompt(brand);
 
   // 3. Create batch row (GENERATING status)
   const [batch] = await db

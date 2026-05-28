@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/index";
 import { brands } from "@/lib/db/schema";
+import type { VoiceProfile } from "@/lib/voice-profile";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
   const orgId = req.headers.get("x-organization-id");
   if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { name?: string; voiceProfile?: Record<string, unknown> };
+  let body: { name?: string; voiceProfile?: VoiceProfile };
   try {
     body = (await req.json()) as typeof body;
   } catch {
