@@ -199,11 +199,9 @@ export function Sidebar({
         </div>
       )}
 
-      <div
-        className={`border-t ${hairline} p-3 text-[11px] ${appearance === "light" ? "text-zinc-600" : "text-zinc-600"}`}
-      >
-        History uses <span className={appearance === "light" ? "text-zinc-500" : "text-zinc-400"}>bbgpt_</span> keys
-      </div>
-    </aside>
-  );
-}
+      {/* Content Planner shortcut */}
+      <div className={`border-t ${hairline} px-2 py-2`}>
+        <a
+          href="/batch-review"
+          className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+            appearance === "lig

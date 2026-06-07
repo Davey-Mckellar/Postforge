@@ -4,7 +4,7 @@ import { SESSION_COOKIE_NAME, LEGACY_SESSION_COOKIE_NAME } from "@/lib/auth-cook
 import { getSessionSecret, isGateEnabled } from "@/lib/server-config";
 
 const PUBLIC_PATHS = ["/login","/register","/forgot-password","/_next","/favicon.ico","/api/auth","/api/stripe/webhook","/api/org/activation-status"];
-const JAIL_ALLOWED = ["/onboarding","/api/onboarding","/schedule-first-post","/api/schedule-first-post"];
+const JAIL_ALLOWED = ["/onboarding","/api/onboarding","/schedule-first-post","/api/schedule-first-post","/brand-setup","/batch-review","/api/brands","/api/batches"];
 
 const isPublic = (p: string) => PUBLIC_PATHS.some((x) => p.startsWith(x));
 const isJailOk = (p: string) => JAIL_ALLOWED.some((x) => p.startsWith(x));
