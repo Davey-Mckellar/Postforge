@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/index";
 import { contentBatches } from "@/lib/db/schema";
 import { generateContentBatch } from "@/services/content-batch";
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     .select()
     .from(contentBatches)
     .where(eq(contentBatches.organizationId, orgId))
-    .orderBy(contentBatches.createdAt);
+    .orderBy(desc(contentBatches.createdAt));
 
   return NextResponse.json({ batches: rows });
 }

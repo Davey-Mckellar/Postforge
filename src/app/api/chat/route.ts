@@ -13,10 +13,77 @@ import { extractStyleDNA } from "@/lib/user-dna";
 import { adiabaticSystemPrompt } from "@/lib/adiabatic-prompt";
 import { guardChatSend } from "@/lib/chat-route-guard";
 import { validatePlanLimit, PlanLimitError } from "@/lib/validate-plan-limit";
-import { InsufficientCreditsError } from "@/services/credit-accounting";
+import {
+  InsufficientCreditsError,
+  reserveCredits,
+  reconcileCredits,
+  refundReservation,
+} from "@/services/credit-accounting";
 import { parseModelTierBody } from "@/lib/model-tier";
 import { trimContext } from "@/lib/context-trim";
 import type { ChatMessage, ModelTier } from "@/lib/types";
+
+/**
+ * Wraps a streaming AI response with pre-flight credit reservation and
+ * post-flight reconciliation. On stream completion the estimated credit
+ * reservation is replaced with the actual token-based charge. On any
+ * stream error or client disconnect the reservation is fully refunded.
+ *
+ * Only called when `orgId` is present — falls back to unwrapped stream
+ * for legacy/wallet-only users.
+ */
+async function withStreamCredits(
+  orgId: string,
+  model: string,
+  estimatedInputTokens: number,
+  getStream: () => Promise<ReadableStream<Uint8Array>>,
+  responseHeaders: Record<string, string>,
+): Promise<Response> {
+  // 600 output tokens is a conservative estimate; reconcileCredits corrects it.
+  const estimatedCredits = Math.max(1, Math.ceil((estimatedInputTokens + 600 * 3) / 1000));
+
+  let aiRunId: string;
+  try {
+    aiRunId = await reserveCredits(orgId, estimatedCredits, "CHAT", model);
+  } catch (err) {
+    if (err instanceof InsufficientCreditsError) {
+      return NextResponse.json(
+        { error: "Insufficient credits", required: err.required, available: err.available, upgradeRequired: true },
+        { status: 402 },
+      );
+    }
+    throw err;
+  }
+
+  let raw: ReadableStream<Uint8Array>;
+  try {
+    raw = await getStream();
+  } catch (err) {
+    await refundReservation(aiRunId, err instanceof Error ? err.message : "Stream init failed");
+    throw err;
+  }
+
+  // Intercept bytes to count output; reconcile on clean close, refund on error/disconnect.
+  let outputBytes = 0;
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      outputBytes += chunk.length;
+      controller.enqueue(chunk);
+    },
+    async flush() {
+      // Each byte ≈ 1 char; divide by 4 for approximate token count.
+      const actualOutputTokens = Math.ceil(outputBytes / 4);
+      await reconcileCredits(aiRunId, estimatedInputTokens, actualOutputTokens);
+    },
+  });
+
+  // If the client disconnects or the upstream errors, refund the reservation.
+  raw.pipeTo(writable).catch(async (err: unknown) => {
+    await refundReservation(aiRunId, err instanceof Error ? err.message : "Stream error");
+  });
+
+  return new Response(readable, { headers: responseHeaders });
+}
 
 export const runtime = "nodejs";
 
@@ -54,7 +121,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: llm.message }, { status: 503 });
   }
 
-  // Org-level plan + credit gate (runs alongside wallet guard during transition)
+  // Org-level plan + credit gate
   const orgId = req.headers.get("x-organization-id");
   if (orgId) {
     try {
@@ -114,12 +181,30 @@ export async function POST(req: NextRequest) {
 
   msgs = trimContext(msgs);
 
+  // Approximate input token count for credit reservation (chars / 4), measured
+  // after context trimming so the estimate reflects what actually gets sent.
+  const estimatedInputTokens = Math.ceil(
+    msgs.reduce((sum, m) => sum + (typeof m.content === "string" ? m.content.length : 0), 0) / 4,
+  );
+
   const commonHeaders = {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive" as const,
     "X-bbGPT-Model": routed,
     "X-bbGPT-Routing-Reason": encodeURIComponent(routingReason),
+  };
+
+  // Shorthand: build a streaming Response, crediting if orgId is present.
+  const respond = (
+    getStream: () => Promise<ReadableStream<Uint8Array>>,
+    extraHeaders: Record<string, string>,
+  ): Promise<Response> => {
+    const headers = { ...commonHeaders, ...extraHeaders };
+    if (orgId) {
+      return withStreamCredits(orgId, routed, estimatedInputTokens, getStream, headers);
+    }
+    return getStream().then((s) => new Response(s, { headers }));
   };
 
   try {
@@ -129,86 +214,75 @@ export async function POST(req: NextRequest) {
         llm.provider === "anthropic"
           ? llm.apiKey
           : (process.env.ANTHROPIC_API_KEY?.trim() ?? "");
-      const stream = await streamClaudeChat({
-        apiKey: anthropicKey,
-        model: routed,
-        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
-        thinking: thinking === "on",
-      });
-      return new Response(stream, {
-        headers: {
-          ...commonHeaders,
-          "X-bbGPT-Provider": "anthropic",
-          "X-bbGPT-Claude-Model": routed,
-        },
-      });
+      return await respond(
+        () => streamClaudeChat({
+          apiKey: anthropicKey,
+          model: routed,
+          messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+          thinking: thinking === "on",
+        }),
+        { "X-bbGPT-Provider": "anthropic", "X-bbGPT-Claude-Model": routed },
+      );
     }
 
     // -- OpenRouter (Claude via OpenAI-compat — fallback) -------------------
     if (llm.provider === "openrouter") {
-      const stream = await streamOpenRouterChat({
-        apiKey: llm.apiKey,
-        model: routed,
-        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
-      });
-      return new Response(stream, {
-        headers: {
-          ...commonHeaders,
-          "X-bbGPT-Provider": "openrouter",
-          "X-bbGPT-Claude-Model": routed,
-        },
-      });
+      return await respond(
+        () => streamOpenRouterChat({
+          apiKey: llm.apiKey,
+          model: routed,
+          messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+        }),
+        { "X-bbGPT-Provider": "openrouter", "X-bbGPT-Claude-Model": routed },
+      );
     }
 
-    // -- Meta Llama (Llama 4 Maverick/Scout — waitlist, free when active) -----
+    // -- Meta Llama (Llama 4 Maverick/Scout) --------------------------------
     if (llm.provider === "meta-llama") {
-      const stream = await streamMetaLlamaChat({
-        apiKey: llm.apiKey,
-        model: routed,
-        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
-      });
-      return new Response(stream, {
-        headers: { ...commonHeaders, "X-bbGPT-Provider": "meta-llama" },
-      });
+      return await respond(
+        () => streamMetaLlamaChat({
+          apiKey: llm.apiKey,
+          model: routed,
+          messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+        }),
+        { "X-bbGPT-Provider": "meta-llama" },
+      );
     }
 
-    // -- Cerebras (Llama — 1M tokens/day free) --------------------------------
+    // -- Cerebras (Llama — 1M tokens/day free) ------------------------------
     if (llm.provider === "cerebras") {
-      const stream = await streamCerebrasChat({
-        apiKey: llm.apiKey,
-        model: routed,
-        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
-      });
-      return new Response(stream, {
-        headers: { ...commonHeaders, "X-bbGPT-Provider": "cerebras" },
-      });
+      return await respond(
+        () => streamCerebrasChat({
+          apiKey: llm.apiKey,
+          model: routed,
+          messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+        }),
+        { "X-bbGPT-Provider": "cerebras" },
+      );
     }
 
-    // -- OpenRouter free Llama 4 (:free tier — no balance needed) -------------
+    // -- OpenRouter free Llama 4 (:free tier) --------------------------------
     if (llm.provider === "openrouter-free") {
-      const stream = await streamOpenRouterFreeChat({
-        apiKey: llm.apiKey,
-        model: routed,
-        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
-      });
-      return new Response(stream, {
-        headers: { ...commonHeaders, "X-bbGPT-Provider": "openrouter-free" },
-      });
+      return await respond(
+        () => streamOpenRouterFreeChat({
+          apiKey: llm.apiKey,
+          model: routed,
+          messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+        }),
+        { "X-bbGPT-Provider": "openrouter-free" },
+      );
     }
 
-    // -- Groq (free tier — Llama 3.3 70B fallback for Claude tiers) ----------
+    // -- Groq (Llama 3.3 70B fallback) --------------------------------------
     if (llm.provider === "groq") {
-      const stream = await streamGroqChat({
-        apiKey: llm.apiKey,
-        model: routed,
-        messages: msgs.map((m) => ({ role: m.role, content: m.content })),
-      });
-      return new Response(stream, {
-        headers: {
-          ...commonHeaders,
-          "X-bbGPT-Provider": "groq",
-        },
-      });
+      return await respond(
+        () => streamGroqChat({
+          apiKey: llm.apiKey,
+          model: routed,
+          messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+        }),
+        { "X-bbGPT-Provider": "groq" },
+      );
     }
 
     // -- Z.AI / GLM ---------------------------------------------------------
@@ -223,13 +297,18 @@ export async function POST(req: NextRequest) {
       });
 
       if (result instanceof ReadableStream) {
-        return new Response(result, {
-          headers: {
-            ...commonHeaders,
-            "X-bbGPT-Provider": "zai",
-          },
-        });
+        // Z.AI returns a ReadableStream directly — wire credits the same way.
+        const zaiStream = result as ReadableStream<Uint8Array>;
+        if (orgId) {
+          return await withStreamCredits(
+            orgId, routed, estimatedInputTokens,
+            () => Promise.resolve(zaiStream),
+            { ...commonHeaders, "X-bbGPT-Provider": "zai" },
+          );
+        }
+        return new Response(zaiStream, { headers: { ...commonHeaders, "X-bbGPT-Provider": "zai" } });
       }
+      // Non-stream fallback (shouldn't happen in practice)
       return NextResponse.json(result);
     }
 
@@ -242,19 +321,14 @@ export async function POST(req: NextRequest) {
     if (thinking === "on") {
       openaiMsgs = mergeOpenAiThinkingDirective(openaiMsgs);
     }
-    const stream = await streamOpenAIChat({
-      apiKey: (llm as { apiKey: string }).apiKey,
-      model: omodel,
-      messages: openaiMsgs,
-    });
-
-    return new Response(stream, {
-      headers: {
-        ...commonHeaders,
-        "X-bbGPT-Provider": "openai",
-        "X-bbGPT-OpenAI-Model": omodel,
-      },
-    });
+    return await respond(
+      () => streamOpenAIChat({
+        apiKey: (llm as { apiKey: string }).apiKey,
+        model: omodel,
+        messages: openaiMsgs,
+      }),
+      { "X-bbGPT-Provider": "openai", "X-bbGPT-OpenAI-Model": omodel },
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Chat failed";
     return NextResponse.json({ error: msg }, { status: 502 });

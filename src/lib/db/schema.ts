@@ -1,4 +1,5 @@
 import type { PaymentAlert } from "@/lib/payment-alert";
+import type { VoiceProfile } from "@/lib/voice-profile";
 import {
   boolean, index, integer, jsonb, pgTable, serial, smallint, text, timestamp, uuid, varchar,
 } from "drizzle-orm/pg-core";
@@ -53,7 +54,7 @@ export const brands = pgTable("brands", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
-  voiceProfile: jsonb("voice_profile"),
+  voiceProfile: jsonb("voice_profile").$type<VoiceProfile | null>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

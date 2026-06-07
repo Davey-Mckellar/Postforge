@@ -204,4 +204,24 @@ export function Sidebar({
         <a
           href="/batch-review"
           className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-            appearance === "lig
+            appearance === "light"
+              ? "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+              : "text-zinc-500 hover:bg-zinc-900/60 hover:text-zinc-200"
+          }`}
+        >
+          <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+          </svg>
+          Content Planner
+        </a>
+      </div>
+
+      <div
+        className={`border-t ${hairline} p-3 text-[11px] ${appearance === "light" ? "text-zinc-600" : "text-zinc-600"}`}
+      >
+        History uses <span className={appearance === "light" ? "text-zinc-500" : "text-zinc-400"}>bbgpt_</span> keys
+      </div>
+    </aside>
+  );
+}
