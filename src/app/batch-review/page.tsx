@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { setBrandContext } from "@/lib/agent-memory";
 
 // ---------------------------------------------------------------------------
 // Types (mirror API shape)
@@ -10,6 +11,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 interface Brand {
   id: string;
   name: string;
+  voiceProfile?: {
+    audience?: string;
+    pillars?: string[];
+    tone?: string;
+    niche?: string;
+    avoid?: string;
+  } | null;
 }
 
 interface Draft {
@@ -268,6 +276,7 @@ function BatchReviewInner() {
   const [draftList, setDraftList] = useState<Draft[]>([]);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
   const [filter, setFilter] = useState<"ALL" | "DRAFT" | "APPROVED" | "REJECTED">("ALL");
 
@@ -280,10 +289,19 @@ function BatchReviewInner() {
       .then((data: { brands?: Brand[] }) => {
         const list = data.brands ?? [];
         setBrands(list);
-        if (!selectedBrandId && list[0]) setSelectedBrandId(list[0].id);
+        const active = selectedBrandId
+          ? (list.find((b) => b.id === selectedBrandId) ?? list[0])
+          : list[0];
+        if (!selectedBrandId && active) setSelectedBrandId(active.id);
+        // Sync active brand voice profile into localStorage memory so every chat
+        // prompt automatically carries the brand tone, audience, and pillars.
+        if (active?.voiceProfile) {
+          setBrandContext(active.name, active.voiceProfile);
+        }
       })
       .catch(() => undefined);
-  }, [selectedBrandId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---- Load batches for selected brand ----
   useEffect(() => {
@@ -326,6 +344,7 @@ function BatchReviewInner() {
     if (!selectedBrandId || generating) return;
     setGenerating(true);
     setGenError(null);
+    setUpgradeRequired(false);
     try {
       const res = await fetch("/api/batches", {
         method: "POST",
@@ -342,7 +361,7 @@ function BatchReviewInner() {
 
       if (!res.ok) {
         if (body.upgradeRequired) {
-          setGenError("Your plan doesn't support batch generation. Upgrade to Pro.");
+          setUpgradeRequired(true);
         } else {
           setGenError(body.error ?? "Generation failed");
         }
@@ -426,7 +445,11 @@ function BatchReviewInner() {
           {brands.length > 0 ? (
             <select
               value={selectedBrandId}
-              onChange={(e) => setSelectedBrandId(e.target.value)}
+              onChange={(e) => {
+                setSelectedBrandId(e.target.value);
+                const picked = brands.find((b) => b.id === e.target.value);
+                if (picked?.voiceProfile) setBrandContext(picked.name, picked.voiceProfile);
+              }}
               className="min-h-[40px] rounded-xl border-0 bg-zinc-900 py-2 pl-3 pr-8 text-sm text-zinc-200 ring-1 ring-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             >
               {brands.map((b) => (
@@ -479,6 +502,24 @@ function BatchReviewInner() {
             </select>
           )}
         </div>
+
+        {/* Upgrade prompt */}
+        {upgradeRequired && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-amber-950/40 px-5 py-4 ring-1 ring-amber-800/50">
+            <div>
+              <p className="text-sm font-semibold text-amber-300">Upgrade required</p>
+              <p className="mt-0.5 text-xs text-amber-500">
+                Batch generation is available on Pro and above. Upgrade to unlock 30-post batches.
+              </p>
+            </div>
+            <a
+              href="/"
+              className="shrink-0 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+            >
+              View plans →
+            </a>
+          </div>
+        )}
 
         {/* Error */}
         {genError && (

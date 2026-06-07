@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { VoiceProfile } from "@/lib/voice-profile";
+import { setBrandContext } from "@/lib/agent-memory";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -185,6 +186,10 @@ export default function BrandSetupPage() {
       }
 
       const { brand } = (await res.json()) as { brand: { id: string } };
+
+      // Write brand voice into localStorage memory so every chat prompt
+      // automatically carries the brand's tone, audience, and pillars.
+      setBrandContext(form.brandName.trim(), voiceProfile);
 
       // Redirect to batch review with new brand pre-selected
       router.push(`/batch-review?brandId=${brand.id}&fresh=1`);

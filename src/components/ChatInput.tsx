@@ -292,6 +292,21 @@ export function ChatInput({
               void submit();
             }
           }}
+          onPaste={(e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            const files: File[] = [];
+            for (const item of Array.from(items)) {
+              if (item.kind === "file") {
+                const file = item.getAsFile();
+                if (file) files.push(file);
+              }
+            }
+            if (files.length > 0) {
+              e.preventDefault();
+              onPendingFilesChange([...pendingFiles, ...files]);
+            }
+          }}
           rows={3}
           placeholder="Message bbGPT…"
           className="min-h-[64px] min-w-0 flex-1 resize-y rounded-2xl bg-zinc-900/60 px-4 py-3 text-base leading-relaxed text-zinc-100 outline-none ring-1 ring-zinc-800 placeholder:text-zinc-500 focus:ring-cyan-500/30 disabled:opacity-50 sm:min-h-[56px]"

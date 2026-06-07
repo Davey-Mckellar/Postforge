@@ -12,6 +12,13 @@ export type AgentMemory = {
   technicalLevel: "beginner" | "intermediate" | "advanced" | "unknown";
   /** Seven-question companion intake (local), injected into memory prompt when present. */
   companionIntake?: string;
+  /**
+   * Brand voice profile from the Brand Setup wizard.
+   * Pre-formatted string injected into every chat system prompt so the AI
+   * always writes in the correct tone, for the correct audience, on the
+   * correct content pillars.
+   */
+  brandContext?: string;
   updatedAt: number;
 };
 
@@ -58,6 +65,37 @@ export function setCompanionIntakeFromQuestionnaire(questions: string[], answers
 export function clearCompanionIntake(): void {
   const m = loadMemory();
   saveMemory({ ...m, companionIntake: undefined });
+}
+
+/**
+ * Writes a formatted brand voice profile into persistent memory so every
+ * subsequent chat request carries it in the system prompt.
+ *
+ * Call this immediately after creating or updating a brand via the wizard.
+ */
+export function setBrandContext(brandName: string, voiceProfile: {
+  audience?: string;
+  pillars?: string[];
+  tone?: string;
+  niche?: string;
+  avoid?: string;
+}): void {
+  const lines: string[] = [
+    `Brand: ${brandName}`,
+  ];
+  if (voiceProfile.audience) lines.push(`Audience & niche: ${voiceProfile.audience}`);
+  if (voiceProfile.pillars?.length) lines.push(`Content pillars: ${voiceProfile.pillars.join(", ")}`);
+  if (voiceProfile.tone) lines.push(`Voice & tone: ${voiceProfile.tone}`);
+  if (voiceProfile.avoid) lines.push(`Avoid: ${voiceProfile.avoid}`);
+
+  const m = loadMemory();
+  saveMemory({ ...m, brandContext: lines.join("\n") });
+}
+
+/** Clears brand context from local memory (e.g. when brand is deleted). */
+export function clearBrandContext(): void {
+  const m = loadMemory();
+  saveMemory({ ...m, brandContext: undefined });
 }
 
 function guessTechnicalLevel(text: string): AgentMemory["technicalLevel"] {
@@ -109,6 +147,9 @@ function compactBlock(label: string, lines: string[], maxChars: number): string 
 export function generateMemoryPrompt(m: AgentMemory): string {
   const block = [
     "User memory (persistent, local):",
+    m.brandContext
+      ? `Brand voice profile (always write in this voice for this brand — apply to every response):\n${m.brandContext}`
+      : "",
     m.companionIntake
       ? `Early connection intake (answered before first chat; honor tone, stakes, and success criteria):\n${m.companionIntake}`
       : "",
