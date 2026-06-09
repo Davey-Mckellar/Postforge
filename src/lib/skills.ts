@@ -61,7 +61,11 @@ export function suggestSkillForMessage(text: string): Skill | null {
   return best.s;
 }
 
-export function skillSystemPrompt(skill: Skill | null): string {
+export function skillSystemPrompt(skill: Skill | null | undefined): string {
   if (!skill) return "";
-  return `Active skill: ${skill.name}\nInstructions:\n${skill.prompt}`;
+  const parts = [`Active skill: ${skill.name}\nInstructions:\n${skill.prompt}`];
+  if (skill.format?.structure) parts.push(`Format your response as: ${skill.format.structure}`);
+  if (skill.format?.maxWords) parts.push(`Maximum ${skill.format.maxWords} words.`);
+  if (skill.format?.tone) parts.push(`Tone: ${skill.format.tone}.`);
+  return parts.join("\n");
 }

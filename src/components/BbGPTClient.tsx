@@ -6,11 +6,14 @@ import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import {
   clearCompanionIntake,
+  detectAndSaveVoiceCalibration,
   generateMemoryPrompt,
   loadMemory,
   saveMemory,
+  saveMood,
   setCompanionIntakeFromQuestionnaire,
   updateMemoryFromConversation,
+  type AgentMemory,
 } from "@/lib/agent-memory";
 import { INTRO_SEVEN_QUESTIONS } from "@/lib/companion-onboarding";
 import {
@@ -604,7 +607,11 @@ export default function BbGPTClient() {
   }, [active?.messages]);
 
   const mood = useMemo(
-    () => inferMood(`${chatDraft}\n${lastUserBubble}`),
+    () => {
+      const m = inferMood(`${chatDraft}\n${lastUserBubble}`);
+      saveMood(m.id as AgentMemory["moodId"]);
+      return m;
+    },
     [chatDraft, lastUserBubble],
   );
 
@@ -746,6 +753,10 @@ export default function BbGPTClient() {
         }
         loadedAttachments = conv.attachments;
         setPendingFiles([]);
+      }
+
+      if (!regenerate && trimmed) {
+        detectAndSaveVoiceCalibration(trimmed);
       }
 
       let reminderForBanner: ReturnType<typeof parseReminderFromMessage> = null;

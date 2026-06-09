@@ -1,6 +1,5 @@
 import { lsKey } from "./storage";
 import type { Conversation } from "./types";
-import { buildHolographicMessages } from "./holographic-context";
 
 const KEY = lsKey("agent_memory_v1");
 
@@ -19,6 +18,8 @@ export type AgentMemory = {
    * correct content pillars.
    */
   brandContext?: string;
+  /** Current session mood -- feeds behavioral instructions in generateMemoryPrompt. */
+  moodId?: "analytical" | "creative" | "learning" | "urgent" | "philosophical" | "neutral";
   updatedAt: number;
 };
 
@@ -98,6 +99,71 @@ export function clearBrandContext(): void {
   saveMemory({ ...m, brandContext: undefined });
 }
 
+/** Writes the current UI mood into memory so it shapes the system prompt. */
+export function saveMood(moodId: AgentMemory["moodId"]): void {
+  const m = loadMemory();
+  saveMemory({ ...m, moodId });
+}
+
+const VOICE_CALIBRATION_SIGNALS: Array<{ pattern: RegExp; instruction: string }> = [
+  {
+    pattern: /\b(be more casual|less formal|relax|chill|loosen up)\b/i,
+    instruction: "Use casual, warm tone. Contractions fine. Light humour welcome.",
+  },
+  {
+    pattern: /\b(be more formal|professional tone|formal please)\b/i,
+    instruction: "Maintain professional, formal tone. No casual language.",
+  },
+  {
+    pattern: /\b(shorter|be brief|tldr|no preamble|cut to the chase|less words|be concise)\b/i,
+    instruction: "Keep every reply under 150 words. Lead with the answer. No preamble.",
+  },
+  {
+    pattern: /\b(more detail|go deeper|elaborate|explain more|be thorough|long form)\b/i,
+    instruction: "User wants depth. Provide full explanations with examples and edge cases.",
+  },
+  {
+    pattern: /\b(use bullets|bullet points|list format|give me a list)\b/i,
+    instruction: "Use bullet points for all multi-part answers.",
+  },
+  {
+    pattern: /\b(no bullets|no lists|prose only|paragraph form)\b/i,
+    instruction: "Write in prose paragraphs. Do not use bullet points or numbered lists.",
+  },
+  {
+    pattern: /\b(stop asking questions|no questions|don't ask me|fewer questions)\b/i,
+    instruction: "Do not end replies with questions. Deliver answers directly.",
+  },
+];
+
+/**
+ * Detects voice calibration signals in a user message and appends the matching
+ * behavioral instruction to styleNotes so it persists for the rest of the session.
+ * Call this in BbGPTClient whenever a user message is sent.
+ */
+export function detectAndSaveVoiceCalibration(userMessage: string): void {
+  const m = loadMemory();
+  let changed = false;
+  for (const signal of VOICE_CALIBRATION_SIGNALS) {
+    if (signal.pattern.test(userMessage) && !m.styleNotes.includes(signal.instruction)) {
+      m.styleNotes = [
+        ...m.styleNotes.filter(
+          (note) =>
+            !VOICE_CALIBRATION_SIGNALS.some(
+              (s) =>
+                s.instruction === note &&
+                s.pattern !== signal.pattern &&
+                s.instruction.split(" ")[0] === signal.instruction.split(" ")[0],
+            ),
+        ),
+        signal.instruction,
+      ];
+      changed = true;
+    }
+  }
+  if (changed) saveMemory({ ...m });
+}
+
 function guessTechnicalLevel(text: string): AgentMemory["technicalLevel"] {
   const t = text.toLowerCase();
   const adv =
@@ -138,29 +204,69 @@ export function updateMemoryFromConversation(conv: Conversation): AgentMemory {
   };
 }
 
-function compactBlock(label: string, lines: string[], maxChars: number): string {
-  const raw = lines.filter(Boolean).join(" · ");
-  if (raw.length <= maxChars) return `${label}: ${raw}`;
-  return `${label}: ${raw.slice(0, maxChars)}…`;
-}
+const MOOD_INSTRUCTIONS: Partial<Record<NonNullable<AgentMemory["moodId"]>, string>> = {
+  urgent:
+    "URGENT MODE: The user needs help fast. Lead with the direct answer on line 1. No preamble, no recap, no closing pleasantries. If there are steps, number them and keep each one to one sentence.",
+  creative:
+    "CREATIVE MODE: Be expansive and generative. Use vivid, evocative language. Explore adjacent ideas freely. Offer unexpected angles. Do not converge too early.",
+  analytical:
+    "ANALYTICAL MODE: User wants precision and structure. Use numbered steps, tables, or code blocks. State assumptions explicitly. Quantify wherever possible.",
+  learning:
+    "LEARNING MODE: User is building understanding. Define jargon on first use. Use one concrete analogy. Check comprehension at the end with a single clarifying question.",
+  philosophical:
+    "PHILOSOPHICAL MODE: Engage with nuance. Offer multiple perspectives before converging. Acknowledge uncertainty. Do not oversimplify.",
+};
+
+const INSTAGRAM_FORMAT_BLOCK = [
+  "When writing Instagram content:",
+  "- Structure every post: Hook (1 punchy line) -> Body (2-3 sentences max) -> CTA -> Hashtags (5-10)",
+  "- The hook must stop the scroll: use a bold claim, a question, a surprising stat, or a story opener",
+  "- Never write long paragraphs -- Instagram is scanned, not read",
+  "- Vary hook style across posts -- do not repeat the same opener pattern",
+  "- Hashtags: mix 2-3 niche-specific + 2-3 broad reach + 1-2 brand-specific",
+].join("\n");
 
 export function generateMemoryPrompt(m: AgentMemory): string {
-  const block = [
-    "User memory (persistent, local):",
-    m.brandContext
-      ? `Brand voice profile (always write in this voice for this brand — apply to every response):\n${m.brandContext}`
-      : "",
-    m.companionIntake
-      ? `Early connection intake (answered before first chat; honor tone, stakes, and success criteria):\n${m.companionIntake}`
-      : "",
-    m.preferences.length ? `Preferences: ${m.preferences.join("; ")}` : "",
-    m.styleNotes.length ? `Style: ${m.styleNotes.join("; ")}` : "",
-    m.ongoingTasks.length ? `Ongoing tasks: ${m.ongoingTasks.join("; ")}` : "",
-    m.topics.length ? `Topics: ${m.topics.slice(0, 12).join(", ")}` : "",
-    `Technical level guess: ${m.technicalLevel}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-  const folded = buildHolographicMessages([{ role: "user", content: block }], { enabled: true });
-  return compactBlock("Memory", [folded[0]?.content ?? block], 2500);
+  const sections: string[] = ["You are bbGPT. Persistent context about this user:"];
+
+  if (m.moodId && MOOD_INSTRUCTIONS[m.moodId]) {
+    sections.push(MOOD_INSTRUCTIONS[m.moodId]!);
+  }
+
+  if (m.brandContext) {
+    sections.push(`Brand voice profile -- apply to every response:\n${m.brandContext}`);
+    sections.push(INSTAGRAM_FORMAT_BLOCK);
+  }
+
+  if (m.companionIntake) {
+    sections.push(
+      `Personal context (answered at session start -- honor the tone, stakes, and goals described):\n${m.companionIntake}`,
+    );
+  }
+
+  if (m.styleNotes.length) {
+    sections.push(
+      `Calibrated style instructions (inferred or set by user -- follow these precisely):\n${m.styleNotes.map((s) => `- ${s}`).join("\n")}`,
+    );
+  }
+
+  if (m.preferences.length) {
+    sections.push(`User preferences: ${m.preferences.join("; ")}`);
+  }
+
+  if (m.ongoingTasks.length) {
+    sections.push(`Ongoing tasks: ${m.ongoingTasks.join("; ")}`);
+  }
+
+  if (m.technicalLevel !== "unknown") {
+    const levelMap: Record<Exclude<AgentMemory["technicalLevel"], "unknown">, string> = {
+      beginner: "Pitch explanations at beginner level -- define terms, use analogies, skip assumed knowledge",
+      intermediate: "Pitch at intermediate level -- skip basics, define advanced terms, include examples",
+      advanced: "Pitch at expert level -- assume deep knowledge, use precise terminology, skip hand-holding",
+    };
+    sections.push(levelMap[m.technicalLevel]);
+  }
+
+  const block = sections.filter(Boolean).join("\n\n");
+  return block.length > 2800 ? block.slice(0, 2800) + "\n[memory truncated]" : block;
 }
