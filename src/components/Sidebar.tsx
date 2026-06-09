@@ -93,9 +93,13 @@ export function Sidebar({
                 onNew();
                 onNavigate?.();
               }}
-              className="min-h-11 w-full rounded-xl bg-zinc-100 px-3 py-2.5 text-sm font-medium text-zinc-950 hover:bg-white sm:min-h-10 sm:py-2"
+              className={`min-h-12 w-full rounded-xl px-3 py-3 text-sm font-semibold sm:min-h-10 sm:py-2 ${
+                appearance === "light"
+                  ? "bg-zinc-900 text-white hover:bg-zinc-700"
+                  : "bg-emerald-600 text-white hover:bg-emerald-500"
+              }`}
             >
-              New chat
+              + New chat
             </button>
           </div>
           <div className="flex-1 overflow-auto p-2">

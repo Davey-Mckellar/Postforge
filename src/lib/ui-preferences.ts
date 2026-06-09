@@ -74,7 +74,7 @@ export function appRootBgClass(appearance: UiPreferences["appearance"]): string 
 /** Header strip classes (stacked on small screens, row from md). */
 export function headerShellClass(appearance: UiPreferences["appearance"]): string {
   const layout =
-    "flex flex-col gap-2 px-3 py-2.5 sm:px-4 sm:py-3 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3";
+    "flex flex-col gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3";
   if (appearance === "light") {
     return `${layout} border-b border-zinc-200 bg-white/95 text-zinc-900 shadow-sm backdrop-blur`;
   }
