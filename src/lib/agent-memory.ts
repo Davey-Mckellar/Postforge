@@ -53,13 +53,63 @@ export function saveMemory(m: AgentMemory): void {
   }
 }
 
-/** Persist structured answers from the blocking intro questionnaire into memory prompt context. */
+/**
+ * Converts the 7-question connection questionnaire answers into a set of
+ * persistent behavioral guide instructions. These shape EVERY response — not
+ * just the first one. Stored in AgentMemory.companionIntake as an instruction
+ * block (not a Q&A dump).
+ *
+ * Question index mapping (matches INTRO_SEVEN_QUESTIONS order):
+ *   0 — Why here / what triggered opening this chat
+ *   1 — What "this helped" looks like / success criteria
+ *   2 — What's been tried / repeated patterns
+ *   3 — What's stuck / heaviest pain
+ *   4 — Urgency / stakes / deadlines
+ *   5 — Who else is affected
+ *   6 — Preferred tone and format
+ */
 export function setCompanionIntakeFromQuestionnaire(questions: string[], answers: string[]): void {
+  const a = (i: number) => (answers[i] ?? "").trim();
+
+  const lines: string[] = [
+    "Personal guide — apply this to every response without needing to be reminded:",
+    "",
+  ];
+
+  // Mission context: why they're here
+  if (a(0)) lines.push(`Mission: ${a(0)}`);
+
+  // Success criteria: what "helped" looks like
+  if (a(1)) lines.push(`Success looks like: ${a(1)}`);
+
+  // What to avoid: been tried / repeated patterns
+  if (a(2)) lines.push(`Already tried / don't repeat: ${a(2)}`);
+
+  // Empathy anchor: what's stuck/heavy
+  if (a(3)) lines.push(`What's stuck or heavy: ${a(3)}`);
+
+  // Urgency calibration
+  if (a(4)) {
+    const urgencyText = a(4);
+    const highUrgency = /\b(urgent|asap|deadline|due|crisis|today|tomorrow|now)\b/i.test(urgencyText);
+    lines.push(`Stakes and urgency: ${urgencyText}${highUrgency ? " — lead with answers, not preamble" : ""}`);
+  }
+
+  // Stakeholder awareness
+  if (a(5)) lines.push(`Who else is affected: ${a(5)}`);
+
+  // Voice and format — hardest behavioral instruction
+  if (a(6)) {
+    lines.push(`Communication style (follow this exactly): ${a(6)}`);
+  }
+
+  lines.push(
+    "",
+    "These aren't background notes — they are standing instructions. Honor the mission, tone, and stakes on every reply.",
+  );
+
   const m = loadMemory();
-  const block = questions
-    .map((q, i) => `${i + 1}. ${q}\n→ ${(answers[i] ?? "").trim()}`)
-    .join("\n\n");
-  saveMemory({ ...m, companionIntake: block });
+  saveMemory({ ...m, companionIntake: lines.filter((l) => l !== "" || lines.indexOf(l) > 0).join("\n") });
 }
 
 /** Removes questionnaire-derived intake from local memory (pair with `clearIntroIntake`). */
@@ -239,9 +289,7 @@ export function generateMemoryPrompt(m: AgentMemory): string {
   }
 
   if (m.companionIntake) {
-    sections.push(
-      `Personal context (answered at session start -- honor the tone, stakes, and goals described):\n${m.companionIntake}`,
-    );
+    sections.push(m.companionIntake);
   }
 
   if (m.styleNotes.length) {

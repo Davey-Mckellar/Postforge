@@ -174,6 +174,23 @@ export default function BbGPTClient() {
     setIntroGateOpen(!localDone);
     setIntroIntakeDone(localDone);
 
+    // Migrate existing users: if local answers exist but companionIntake is still the old
+    // Q&A dump format (starts with "1."), regenerate as behavioral guide instructions.
+    if (localDone) {
+      const existing = loadMemory();
+      const localRecord = (() => {
+        try {
+          const raw = localStorage.getItem("bbgpt_intro_questionnaire_v1");
+          if (!raw) return null;
+          return JSON.parse(raw) as { answers?: string[] };
+        } catch { return null; }
+      })();
+      const isOldFormat = existing.companionIntake?.startsWith("1.");
+      if ((isOldFormat || !existing.companionIntake) && localRecord?.answers?.length === 7) {
+        setCompanionIntakeFromQuestionnaire(INTRO_SEVEN_QUESTIONS, localRecord.answers);
+      }
+    }
+
     void (async () => {
       try {
         const res = await fetch("/api/profile/journey", { credentials: "include" });
@@ -186,6 +203,7 @@ export default function BbGPTClient() {
         };
         if (data.source !== "server" || !data.complete || !Array.isArray(data.answers)) return;
         // Server has answers -- sync to localStorage and mark complete regardless of local state.
+        // Always regenerate so the behavioral guide format is up to date.
         saveIntroIntake(data.answers);
         setCompanionIntakeFromQuestionnaire(INTRO_SEVEN_QUESTIONS, data.answers);
         setIntroGateOpen(false);
