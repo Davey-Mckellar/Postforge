@@ -126,7 +126,7 @@ export default function BbGPTClient() {
   const [routingReason, setRoutingReason] = useState<string | null>(null);
   const [activeSkill, setActiveSkill] = useState<Skill | null>(null);
   const [skillHint, setSkillHint] = useState<Skill | null>(null);
-  /** Composer text — drives skills, mood, and templates */
+  /** Composer text -- drives skills, mood, and templates */
   const [chatDraft, setChatDraft] = useState("");
   /** Optional image-only prompt when the main composer is empty (ChatGPT-style image flow). */
   const [imagePromptExtra, setImagePromptExtra] = useState("");
@@ -182,7 +182,7 @@ export default function BbGPTClient() {
           completedAt?: number;
         };
         if (data.source !== "server" || !data.complete || !Array.isArray(data.answers)) return;
-        // Server has answers — sync to localStorage and mark complete regardless of local state.
+        // Server has answers -- sync to localStorage and mark complete regardless of local state.
         saveIntroIntake(data.answers);
         setCompanionIntakeFromQuestionnaire(INTRO_SEVEN_QUESTIONS, data.answers);
         setIntroGateOpen(false);
@@ -616,7 +616,7 @@ export default function BbGPTClient() {
       }
       const plan = PLANS[credits.planId];
       if (planRank(plan.id) < planRank(t.minPlan)) {
-        setBanner(`That template needs ${t.minPlan}+ — open Plans to upgrade.`);
+        setBanner(`That template needs ${t.minPlan}+ -- open Plans to upgrade.`);
         setSubscriptionOpen(true);
         return;
       }
@@ -688,10 +688,10 @@ export default function BbGPTClient() {
       const useSchrodinger = schrodinger && !agentMode;
       const mode: SendMode = agentMode ? "agent" : useSchrodinger ? "schrodinger" : "chat";
       const schPair = schrodingerPair(model, planDef.allowedModels);
-      /** Multimodal attachments always use `/api/chat/gemini` (billed as chat, thinking off) — match labels + credit math. */
+      /** Multimodal attachments always use `/api/chat/gemini` (billed as chat, thinking off) -- match labels + credit math. */
       const attachmentMultimodal = !regenerate && pendingFiles.length > 0;
       if (attachmentMultimodal && (agentMode || useSchrodinger)) {
-        setBanner("File attachments use Gemini — turn off Agent and Two models for this chat.");
+        setBanner("File attachments use Gemini -- turn off Agent and Two models for this chat.");
         return;
       }
       const costMode: SendMode = attachmentMultimodal ? "chat" : mode;
@@ -716,7 +716,7 @@ export default function BbGPTClient() {
           secondaryModel: costInput.secondaryModel,
         });
         setBanner(
-          `Not included on ${planDef.label}: adjust model, modes, or quantum toggles — or open Plans to upgrade.`,
+          `Not included on ${planDef.label}: adjust model, modes, or quantum toggles -- or open Plans to upgrade.`,
         );
         return;
       }
@@ -793,7 +793,7 @@ export default function BbGPTClient() {
         }
         const last = prev.messages[prev.messages.length - 1];
         if (last.role !== "assistant") {
-          setBanner("Regenerate replaces the last assistant message — send a message first.");
+          setBanner("Regenerate replaces the last assistant message -- send a message first.");
           setBusy(false);
           streamAbortRef.current = null;
           return;
@@ -939,7 +939,7 @@ export default function BbGPTClient() {
           return;
         }
         uiDiag("send.fetch", "fail", { error: String(e) });
-        setBanner("Network error — check your connection and try again.");
+        setBanner("Network error -- check your connection and try again.");
         return;
       }
 
@@ -1118,7 +1118,7 @@ export default function BbGPTClient() {
         if (e instanceof DOMException && e.name === "AbortError") {
           setBanner("Generation stopped.");
         } else {
-          setBanner("Stream interrupted — try again.");
+          setBanner("Stream interrupted -- try again.");
         }
       } finally {
         if (streamCompleted && readAloudRef.current && acc.trim()) {
@@ -1174,7 +1174,7 @@ export default function BbGPTClient() {
       },
     };
     if (!planPermitsSend(planDef, costInput)) {
-      setBanner(`Not included on ${planDef.label} — open Plans.`);
+      setBanner(`Not included on ${planDef.label} -- open Plans.`);
       return;
     }
     const costCore = { model, thinking: false, mode };
@@ -1201,7 +1201,7 @@ export default function BbGPTClient() {
         } catch {
           setBanner(
             res.ok
-              ? "Image response was not valid JSON — check server logs."
+              ? "Image response was not valid JSON -- check server logs."
               : `Image generation failed (${res.status}).`,
           );
           return;
@@ -1228,7 +1228,7 @@ export default function BbGPTClient() {
       const assistantMsg: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: `Here’s your image.\n\n${md}`,
+        content: `Here's your image.\n\n${md}`,
         createdAt: Date.now(),
         toolCalls: [],
         errorCorrectionLog: [],
@@ -1391,7 +1391,7 @@ export default function BbGPTClient() {
         </div>
       ) : null}
       <header className={headerShellClass(appearance)}>
-        <div className="flex w-full min-w-0 items-start justify-between gap-2 md:contents">
+        <div className="flex w-full min-w-0 items-center justify-between gap-2 md:contents">
           <div className="min-w-0 flex-1 md:max-w-[min(100%,24rem)]">
             <div className="flex flex-wrap items-center gap-2">
               <div
@@ -1414,19 +1414,21 @@ export default function BbGPTClient() {
                 }`}
                 title={
                   routingReason ??
-                  "Every chat response includes a routing note: either Kolmogorov’s pick or “router off — using selected model.”"
+                  `Every chat response includes a routing note: either Kolmogorov's pick or "router off -- using selected model."`
                 }
               >
                 {routingReason ? routingReason : "Model routing (see after send)"}
               </span>
             </div>
+            {/* Subtitle hidden on mobile -- keyboard shortcut copy irrelevant on touch */}
             <div
-              className={`mt-0.5 truncate text-[11px] ${appearance === "light" ? "text-zinc-600" : "text-zinc-600"}`}
+              className={`mt-0.5 hidden truncate text-[11px] sm:block ${appearance === "light" ? "text-zinc-600" : "text-zinc-600"}`}
             >
               Plans gate models · credits per send · memory · Cmd/Ctrl+K search
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2 md:hidden">
+          {/* Mobile right cluster: credits + compose (new chat) + hamburger */}
+          <div className="flex shrink-0 items-center gap-1.5 md:hidden">
             <span
               className={`rounded-full px-2.5 py-1.5 font-mono text-[10px] ring-1 ${
                 appearance === "light"
@@ -1441,6 +1443,23 @@ export default function BbGPTClient() {
             >
               {credits ? `${credits.balance} cr` : "…"}
             </span>
+            {/* Compose / New Chat -- one tap, always visible on mobile */}
+            <button
+              type="button"
+              aria-label="New chat"
+              onClick={() => { newChat(); setMobileNavOpen(false); }}
+              className={`inline-flex h-11 min-w-11 items-center justify-center rounded-xl ring-1 ${
+                appearance === "light"
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-300 hover:bg-emerald-100"
+                  : "bg-emerald-900/30 text-emerald-400 ring-emerald-800/60 hover:bg-emerald-900/50"
+              }`}
+              title="New chat"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            {/* Hamburger -- opens chat history drawer */}
             <button
               type="button"
               aria-expanded={mobileNavOpen}
