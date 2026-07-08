@@ -1,0 +1,1 @@
+ALTER TABLE "awards" ALTER COLUMN "shipment_id" DROP NOT NULL;

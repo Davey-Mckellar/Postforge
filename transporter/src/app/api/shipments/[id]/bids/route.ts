@@ -4,14 +4,17 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bids, shipments } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
+import { expireStaleBids } from "@/lib/bids/expire";
 
 const bidInput = z.object({
   amount: z.string().min(1),
   message: z.string().optional(),
+  expiresAt: z.string().datetime().optional(),
 });
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await expireStaleBids({ shipmentId: id });
   const rows = await db
     .select()
     .from(bids)
@@ -54,6 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       bidderId: user.id,
       amount: parsed.data.amount,
       message: parsed.data.message,
+      expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : undefined,
     })
     .returning();
 

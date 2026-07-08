@@ -1,9 +1,24 @@
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { getSessionUser } from "@/lib/session";
 import { signOut } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import VerificationBadge from "@/components/verification-badge";
 
 export default async function Nav() {
   const user = await getSessionUser();
+
+  let tier: "unverified" | "basic" | "verified" | null = null;
+  if (user) {
+    const [row] = await db
+      .select({ verificationTier: users.verificationTier })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+    tier = row?.verificationTier ?? "unverified";
+  }
+
   return (
     <header className="border-b border-neutral-200 bg-white">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 text-sm">
@@ -21,8 +36,8 @@ export default async function Nav() {
         <div className="flex items-center gap-4">
           {user ? (
             <>
-              <span className="text-neutral-500">
-                {user.name} ({user.role})
+              <span className="flex items-center gap-2 text-neutral-500">
+                {user.name} ({user.role}) {tier && <VerificationBadge tier={tier} />}
               </span>
               <form
                 action={async () => {

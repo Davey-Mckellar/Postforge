@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import { awards, users } from "@/lib/db/schema";
+import VerificationBadge from "@/components/verification-badge";
+import { pastAwardCount } from "@/lib/users/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +27,14 @@ export default async function AwardDetailPage({
       status: awards.status,
       paymentStatus: awards.paymentStatus,
       createdAt: awards.createdAt,
+      senderId: awards.senderId,
+      transporterId: awards.transporterId,
       senderName: sender.name,
       senderEmail: sender.email,
+      senderTier: sender.verificationTier,
       transporterName: transporter.name,
       transporterEmail: transporter.email,
+      transporterTier: transporter.verificationTier,
     })
     .from(awards)
     .leftJoin(sender, eq(awards.senderId, sender.id))
@@ -37,6 +43,11 @@ export default async function AwardDetailPage({
     .limit(1);
 
   if (!row) notFound();
+
+  const [senderPast, transporterPast] = await Promise.all([
+    pastAwardCount(row.senderId),
+    pastAwardCount(row.transporterId),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -55,12 +66,20 @@ export default async function AwardDetailPage({
             (Phase 2 wires Stripe Connect; this stays &quot;not_implemented&quot; until then.)
           </span>
         </div>
-        <div className="mt-3">
-          <div>
-            Sender: <strong>{row.senderName}</strong> · {row.senderEmail}
+        <div className="mt-3 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-neutral-500">Sender:</span>
+            <strong>{row.senderName}</strong>
+            <span className="text-neutral-500">· {row.senderEmail}</span>
+            {row.senderTier && <VerificationBadge tier={row.senderTier} />}
+            <span className="text-xs text-neutral-500">· {senderPast} past</span>
           </div>
-          <div>
-            Transporter: <strong>{row.transporterName}</strong> · {row.transporterEmail}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-neutral-500">Transporter:</span>
+            <strong>{row.transporterName}</strong>
+            <span className="text-neutral-500">· {row.transporterEmail}</span>
+            {row.transporterTier && <VerificationBadge tier={row.transporterTier} />}
+            <span className="text-xs text-neutral-500">· {transporterPast} past</span>
           </div>
         </div>
         {row.shipmentId && (

@@ -3,15 +3,19 @@ import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { awards, bids, capacityOffers, shipments } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
+import { chainInfo, counterparty } from "@/lib/bids/chain";
 
 /**
  * Accepting a bid is the marketplace's commit point:
  *   - target bid -> accepted
- *   - sibling bids on the same posting -> rejected
+ *   - sibling bids on the same posting (including other chain tips) -> rejected
  *   - shipment -> awarded (or capacity -> matched)
  *   - insert awards row (paymentStatus = not_implemented until Phase 2)
- * All four writes happen in one transaction so a crash mid-flow cannot
- * leave the posting in a half-accepted state.
+ *
+ * Authorization: the current bid's counterparty accepts. In a counter chain
+ * the "counterparty" is derived from the chain root's bidderId, not the
+ * current bid's bidderId — a sender's counter still has to be accepted by
+ * the original transporter, not by the sender themselves.
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
@@ -25,36 +29,40 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "bid_not_open" }, { status: 409 });
   }
 
-  let senderId: string;
-  let transporterId: string;
-  let counterpartyId: string;
+  const { rootBidderId } = await chainInfo(bidId);
+
+  let posterId: string;
+  let awardSenderId: string;
+  let awardTransporterId: string;
 
   if (bid.shipmentId) {
     const [shipment] = await db
-      .select()
+      .select({ senderId: shipments.senderId })
       .from(shipments)
       .where(eq(shipments.id, bid.shipmentId))
       .limit(1);
     if (!shipment) return NextResponse.json({ error: "shipment_not_found" }, { status: 404 });
-    senderId = shipment.senderId;
-    transporterId = bid.bidderId;
-    counterpartyId = shipment.senderId;
+    posterId = shipment.senderId;
+    // Shipment postings: sender is the poster; transporter is the chain root's bidder.
+    awardSenderId = posterId;
+    awardTransporterId = rootBidderId;
   } else if (bid.capacityOfferId) {
     const [offer] = await db
-      .select()
+      .select({ transporterId: capacityOffers.transporterId })
       .from(capacityOffers)
       .where(eq(capacityOffers.id, bid.capacityOfferId))
       .limit(1);
     if (!offer) return NextResponse.json({ error: "capacity_not_found" }, { status: 404 });
-    senderId = bid.bidderId;
-    transporterId = offer.transporterId;
-    counterpartyId = offer.transporterId;
+    posterId = offer.transporterId;
+    // Capacity postings: transporter is the poster; sender is the chain root's bidder.
+    awardSenderId = rootBidderId;
+    awardTransporterId = posterId;
   } else {
     return NextResponse.json({ error: "bid_has_no_parent" }, { status: 500 });
   }
 
-  // Only the counterparty of the posting can accept a bid on it.
-  if (counterpartyId !== user.id) {
+  const allowedAcceptor = counterparty(posterId, rootBidderId, bid.bidderId);
+  if (allowedAcceptor !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -66,11 +74,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         .update(bids)
         .set({ status: "rejected" })
         .where(
-          and(
-            eq(bids.shipmentId, bid.shipmentId),
-            ne(bids.id, bidId),
-            eq(bids.status, "open"),
-          ),
+          and(eq(bids.shipmentId, bid.shipmentId), ne(bids.id, bidId), eq(bids.status, "open")),
         );
       await tx.update(shipments).set({ status: "awarded" }).where(eq(shipments.id, bid.shipmentId));
     } else if (bid.capacityOfferId) {
@@ -93,11 +97,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const [created] = await tx
       .insert(awards)
       .values({
-        shipmentId: bid.shipmentId ?? undefined!,
+        shipmentId: bid.shipmentId ?? undefined,
         capacityOfferId: bid.capacityOfferId ?? undefined,
         bidId,
-        senderId,
-        transporterId,
+        senderId: awardSenderId,
+        transporterId: awardTransporterId,
         agreedPrice: bid.amount,
       })
       .returning();

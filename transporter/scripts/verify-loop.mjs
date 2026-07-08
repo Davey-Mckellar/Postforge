@@ -230,6 +230,117 @@ async function main() {
   }
 
   console.log("\nPHASE 1 CORE LOOP: PASS");
+
+  // -----------------------------------------------------------------------
+  // Phase 1.5: counter-offers
+  // -----------------------------------------------------------------------
+  console.log("\n[12] Phase 1.5: counter-offer chain");
+  const senderD = `sender-d+${now}@example.com`;
+  const transporterE = `transporter-e+${now}@example.com`;
+  const wanderer = `wanderer-f+${now}@example.com`;
+  const dJar = await register(senderD, password, "Sender D", "sender");
+  const eJar = await register(transporterE, password, "Transporter E", "transporter");
+  const fJar = await register(wanderer, password, "Wanderer F", "both");
+  const dUser = await signIn(dJar, senderD, password);
+  const eUser = await signIn(eJar, transporterE, password);
+  await signIn(fJar, wanderer, password);
+
+  console.log("  D posts a shipment");
+  const dShipment = await req(dJar, "POST", "/api/shipments", {
+    origin: "Ottawa, ON",
+    destination: "Halifax, NS",
+    cargoDescription: "Server racks",
+    weightKg: "800",
+    targetPrice: "2000",
+  });
+  eq("  shipment created", dShipment.status, 201);
+  const shipId = dShipment.data.shipment.id;
+
+  console.log("  E bids $2500 on D's shipment");
+  const eBid = await req(eJar, "POST", `/api/shipments/${shipId}/bids`, { amount: "2500" });
+  eq("  E bid created", eBid.status, 201);
+  const eBidId = eBid.data.bid.id;
+
+  console.log("  D counters $2100");
+  const dCounter = await req(dJar, "POST", `/api/bids/${eBidId}/counter`, { amount: "2100" });
+  eq("  counter created", dCounter.status, 201);
+  const dCounterId = dCounter.data.bid.id;
+
+  console.log("  Non-participant F tries to counter D's counter → 403");
+  const forbiddenCounter = await req(fJar, "POST", `/api/bids/${dCounterId}/counter`, {
+    amount: "9",
+  });
+  eq("  outsider forbidden", forbiddenCounter.status, 403);
+
+  console.log("  D tries to accept his own counter → 403");
+  const dSelfAccept = await req(dJar, "POST", `/api/bids/${dCounterId}/accept`, {});
+  eq("  self-accept forbidden", dSelfAccept.status, 403);
+
+  console.log("  Add a sibling bid from F on D's shipment");
+  const fSibling = await req(fJar, "POST", `/api/shipments/${shipId}/bids`, { amount: "2400" });
+  eq("  sibling bid created", fSibling.status, 201);
+  const fSiblingId = fSibling.data.bid.id;
+
+  console.log("  E accepts D's counter");
+  const eAccept = await req(eJar, "POST", `/api/bids/${dCounterId}/accept`, {});
+  eq("  accept succeeded", eAccept.status, 201);
+  const counterAward = eAccept.data.award;
+  assert("counter award agreedPrice=2100", counterAward.agreedPrice === "2100");
+  assert("counter award senderId=D", counterAward.senderId === dUser.id);
+  assert("counter award transporterId=E", counterAward.transporterId === eUser.id);
+
+  console.log("  DB check on counter chain");
+  const pg2 = new Client({ connectionString: process.env.DATABASE_URL });
+  await pg2.connect();
+  try {
+    const original = await pg2.query("SELECT status FROM bids WHERE id=$1", [eBidId]);
+    eq("  E's original bid = countered", original.rows[0].status, "countered");
+    const counterRow = await pg2.query("SELECT status FROM bids WHERE id=$1", [dCounterId]);
+    eq("  D's counter = accepted", counterRow.rows[0].status, "accepted");
+    const sibling = await pg2.query("SELECT status FROM bids WHERE id=$1", [fSiblingId]);
+    eq("  F's sibling = rejected", sibling.rows[0].status, "rejected");
+    const ship = await pg2.query("SELECT status FROM shipments WHERE id=$1", [shipId]);
+    eq("  shipment = awarded", ship.rows[0].status, "awarded");
+  } finally {
+    await pg2.end();
+  }
+
+  // -----------------------------------------------------------------------
+  // Phase 1.5: bid expiry
+  // -----------------------------------------------------------------------
+  console.log("\n[13] Phase 1.5: bid expiry");
+  const expShipment = await req(dJar, "POST", "/api/shipments", {
+    origin: "Ottawa, ON",
+    destination: "Fredericton, NB",
+    cargoDescription: "Expires-soon test",
+    targetPrice: "500",
+  });
+  eq("  expiry shipment created", expShipment.status, 201);
+  const expShipId = expShipment.data.shipment.id;
+
+  const soon = new Date(Date.now() + 1500).toISOString();
+  const expBid = await req(eJar, "POST", `/api/shipments/${expShipId}/bids`, {
+    amount: "600",
+    expiresAt: soon,
+  });
+  eq("  bid with expiry created", expBid.status, 201);
+  const expBidId = expBid.data.bid.id;
+
+  console.log("  waiting 3s for the bid to age past expiry…");
+  await new Promise((r) => setTimeout(r, 3000));
+
+  console.log("  fetch bids to trigger lazy expiry sweep");
+  const listAfter = await req(dJar, "GET", `/api/shipments/${expShipId}/bids`);
+  eq("  list returned", listAfter.status, 200);
+  const expiredRow = listAfter.data.bids.find((b) => b.id === expBidId);
+  assert("  bid row present", !!expiredRow);
+  eq("  bid status = expired", expiredRow.status, "expired");
+
+  console.log("  attempt to accept expired bid → 409");
+  const expAccept = await req(dJar, "POST", `/api/bids/${expBidId}/accept`, {});
+  eq("  accept blocked", expAccept.status, 409);
+
+  console.log("\nPHASE 1.5 REFINEMENTS: PASS");
 }
 
 main().catch((err) => {

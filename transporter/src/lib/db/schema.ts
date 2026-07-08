@@ -51,8 +51,15 @@ export const awardStatusEnum = pgEnum("award_status", [
   "disputed",
   "cancelled",
 ]);
-// Phase 2 will expand this enum with real payment states.
-export const paymentStatusEnum = pgEnum("payment_status", ["not_implemented"]);
+// Phase 2 wires Stripe Connect; the enum ships the target values now so
+// authorize/capture flows can be added without an ALTER TYPE dance later.
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "not_implemented",
+  "authorized",
+  "captured",
+  "refunded",
+  "failed",
+]);
 
 /* ------------------------------------------------------------------ */
 /*  Users (shared with Auth.js Drizzle adapter)                        */
@@ -67,6 +74,12 @@ export const users = pgTable("users", {
   image: text("image"),
   role: userRoleEnum("role").notNull().default("both"),
   verificationTier: verificationTierEnum("verification_tier").notNull().default("unverified"),
+  // Phase 2 / Phase 3 identity — nullable so Phase 1 code writes nothing.
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeConnectAccountId: text("stripe_connect_account_id"),
+  linkedinVerifiedAt: timestamp("linkedin_verified_at"),
+  nscMcNumber: text("nsc_mc_number"),
+  fmcsaMcNumber: text("fmcsa_mc_number"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -134,6 +147,9 @@ export const shipments = pgTable("shipments", {
   pickupWindowStart: timestamp("pickup_window_start"),
   pickupWindowEnd: timestamp("pickup_window_end"),
   status: shipmentStatusEnum("status").notNull().default("open"),
+  // Phase 2 commitment hold — placeholder until Stripe capture-on-no-show lands.
+  commitmentHoldAmount: numeric("commitment_hold_amount"),
+  commitmentHoldIntentId: text("commitment_hold_intent_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -170,9 +186,10 @@ export const bids = pgTable("bids", {
 
 export const awards = pgTable("awards", {
   id: uuid("id").defaultRandom().primaryKey(),
-  shipmentId: uuid("shipment_id")
-    .notNull()
-    .references(() => shipments.id),
+  // Exactly one of shipmentId / capacityOfferId is set for a given award —
+  // this comes from which side of the marketplace the accepted bid lived on.
+  // No CHECK constraint yet; route logic maintains the invariant.
+  shipmentId: uuid("shipment_id").references(() => shipments.id),
   capacityOfferId: uuid("capacity_offer_id").references(() => capacityOffers.id),
   bidId: uuid("bid_id")
     .notNull()
@@ -186,5 +203,10 @@ export const awards = pgTable("awards", {
   agreedPrice: numeric("agreed_price").notNull(),
   status: awardStatusEnum("status").notNull().default("confirmed"),
   paymentStatus: paymentStatusEnum("payment_status").notNull().default("not_implemented"),
+  // Phase 2 Stripe Connect targets — Phase 1 writes nothing here.
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeChargeId: text("stripe_charge_id"),
+  stripeTransferId: text("stripe_transfer_id"),
+  stripeConnectAccountId: text("stripe_connect_account_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
