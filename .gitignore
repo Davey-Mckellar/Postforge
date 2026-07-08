@@ -76,3 +76,8 @@ scripts/_www-login.html
 outputs/*.iso
 outputs/rufus.exe
 outputs/user-data
+
+# transporter (isolated Phase 1 app)
+/transporter/node_modules/
+/transporter/.next/
+!/transporter/.env.example
