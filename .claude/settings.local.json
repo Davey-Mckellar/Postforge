@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(service postgresql *)",
+      "Bash(npx tsc *)",
+      "Bash(DATABASE_URL=\"postgres://placeholder:placeholder@example.neon.tech/placeholder?sslmode=disable\" AUTH_SECRET=\"build-placeholder-secret-32-bytes-x\" AUTH_URL=\"http://localhost:3100\" npx next build)",
+      "Read(//tmp/**)",
+      "Bash(node scripts/verify-loop.mjs)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
