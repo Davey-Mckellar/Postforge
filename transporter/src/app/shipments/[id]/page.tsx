@@ -166,6 +166,11 @@ function BidThread({
   const canWithdraw = currentUserId === node.bidderId && node.status === "open";
   const canCounter = currentUserId === counterpartyId && node.status === "open";
   const stats = bidderStats.get(node.bidderId) ?? 0;
+  // Sealed bidding: only the posting owner (who must compare offers to
+  // accept/counter) and the bid's own bidder see its amount. Everyone else
+  // — other bidders, signed-out visitors — sees that a bid exists but not
+  // its terms, so competing bidders can't read and undercut each other.
+  const canSeeAmount = currentUserId === shipmentSenderId || currentUserId === node.bidderId;
 
   return (
     <li>
@@ -175,7 +180,14 @@ function BidThread({
       >
         <div className="min-w-0">
           <div className="text-sm font-medium">
-            ${node.amount} <span className="text-neutral-400">·</span>{" "}
+            {canSeeAmount ? (
+              `$${node.amount}`
+            ) : (
+              <span className="text-neutral-400" title="Bid amount is sealed">
+                Sealed
+              </span>
+            )}{" "}
+            <span className="text-neutral-400">·</span>{" "}
             <span className="text-neutral-700">{node.bidderName ?? node.bidderId}</span>{" "}
             <VerificationBadge tier={node.bidderTier} />{" "}
             <span className="ml-1 text-xs text-neutral-500">
@@ -185,7 +197,7 @@ function BidThread({
           <div className="text-xs text-neutral-500">
             status: {node.status}
             {node.expiresAt ? ` · expires ${formatExpiry(node.expiresAt)}` : ""}
-            {node.message ? ` · ${node.message}` : ""}
+            {canSeeAmount && node.message ? ` · ${node.message}` : ""}
           </div>
         </div>
         <div className="flex items-center gap-2">

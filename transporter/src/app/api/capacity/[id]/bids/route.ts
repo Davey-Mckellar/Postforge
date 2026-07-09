@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { bids, capacityOffers } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { expireStaleBids } from "@/lib/bids/expire";
+import { sealBidsForViewer } from "@/lib/bids/seal";
 
 const bidInput = z.object({
   amount: z.string().min(1),
@@ -15,12 +16,24 @@ const bidInput = z.object({
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   await expireStaleBids({ capacityOfferId: id });
+
+  const [offer] = await db
+    .select({ transporterId: capacityOffers.transporterId })
+    .from(capacityOffers)
+    .where(eq(capacityOffers.id, id))
+    .limit(1);
+  if (!offer) return NextResponse.json({ error: "capacity_not_found" }, { status: 404 });
+
+  const viewer = await getSessionUser();
   const rows = await db
     .select()
     .from(bids)
     .where(eq(bids.capacityOfferId, id))
     .orderBy(desc(bids.createdAt));
-  return NextResponse.json({ bids: rows });
+
+  return NextResponse.json({
+    bids: sealBidsForViewer(rows, offer.transporterId, viewer?.id ?? null),
+  });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

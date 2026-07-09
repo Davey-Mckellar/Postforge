@@ -341,6 +341,52 @@ async function main() {
   eq("  accept blocked", expAccept.status, 409);
 
   console.log("\nPHASE 1.5 REFINEMENTS: PASS");
+
+  // -----------------------------------------------------------------------
+  // Phase 1.5b: sealed bid visibility
+  // -----------------------------------------------------------------------
+  console.log("\n[14] Phase 1.5b: sealed bid visibility");
+  const sealShipment = await req(dJar, "POST", "/api/shipments", {
+    origin: "Kingston, ON",
+    destination: "Quebec City, QC",
+    cargoDescription: "Sealed-bid test",
+    targetPrice: "900",
+  });
+  eq("  sealed-test shipment created", sealShipment.status, 201);
+  const sealShipId = sealShipment.data.shipment.id;
+
+  const eSealBid = await req(eJar, "POST", `/api/shipments/${sealShipId}/bids`, {
+    amount: "850",
+    message: "E's real number",
+  });
+  eq("  E's bid created", eSealBid.status, 201);
+
+  const fSealBid = await req(fJar, "POST", `/api/shipments/${sealShipId}/bids`, {
+    amount: "700",
+    message: "F's real number",
+  });
+  eq("  F's bid created", fSealBid.status, 201);
+
+  console.log("  E lists bids — should see own amount, not F's");
+  const eList = await req(eJar, "GET", `/api/shipments/${sealShipId}/bids`);
+  eq("  E list returned", eList.status, 200);
+  const eOwn = eList.data.bids.find((b) => b.id === eSealBid.data.bid.id);
+  const eSeesF = eList.data.bids.find((b) => b.id === fSealBid.data.bid.id);
+  eq("  E sees own amount", eOwn.amount, "850");
+  eq("  E's own bid not sealed", eOwn.sealed, false);
+  eq("  E does NOT see F's amount", eSeesF.amount, null);
+  eq("  F's bid is sealed to E", eSeesF.sealed, true);
+
+  console.log("  D (poster) lists bids — should see both amounts");
+  const dList = await req(dJar, "GET", `/api/shipments/${sealShipId}/bids`);
+  eq("  D list returned", dList.status, 200);
+  const dSeesE = dList.data.bids.find((b) => b.id === eSealBid.data.bid.id);
+  const dSeesF = dList.data.bids.find((b) => b.id === fSealBid.data.bid.id);
+  eq("  poster sees E's amount", dSeesE.amount, "850");
+  eq("  poster sees F's amount", dSeesF.amount, "700");
+  eq("  poster's view is never sealed", dSeesE.sealed, false);
+
+  console.log("\nPHASE 1.5b SEALED BIDDING: PASS");
 }
 
 main().catch((err) => {
